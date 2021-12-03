@@ -1,12 +1,22 @@
 use super::*;
 use serde::Serializer;
 use serde::ser::{SerializeMap, SerializeSeq};
-use crate::{FieldValue, Level};
+use crate::{Level};
+use super::SString;
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(untagged)]
+pub enum FieldValue {
+  Bool(bool),
+  Float(f64),
+  Int(i64),
+  Str(SString)
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all="snake_case")]
 pub enum EventKind<'a> {
-  #[serde(borrow)]
+  #[serde(serialize_with="serialize_event_fields")]
   Event(EventFields<'a>),
   SpanCreate,
   SpanClose(Option<SpanTime>),
@@ -105,6 +115,19 @@ impl<'a> AddFields for Spans<'a> {
     self.0.push(SpanItem::Field{name, val});
   }
 }
+
+
+fn serialize_event_fields<S>(fields: &EventFields, s: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer
+{
+  let mut m = s.serialize_map(Some(fields.len()))?;
+  for (field, val) in fields {
+    m.serialize_entry(field, val)?;
+  }
+  m.end()
+}
+
 
 
 struct SerializeSpanFields<'a>(&'a [SpanItem<'a>]);

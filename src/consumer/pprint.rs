@@ -53,15 +53,21 @@ impl fmt::Display for FmtEvent<'_> {
       EventKind::Event(fields) => {
         if let Some(msg) = fields.get("message") {
           self.printer.fmt_fieldvalue(f, msg)?;
-          f.write_str("\n")?;
           if fields.len() > 1 {
+            f.write_str("\n")?;
             f.write_str(CONT)?;
             self.printer.fmt_fields(f, fields.iter().filter(|(n, _)| n.as_str() != "message"))?;
-            f.write_str("\n")?;
           }
+        } else {
+          self.printer.fmt_fields(f, fields.iter())?;
         }
+        f.write_str("\n")?;
       }
-      _ => {}
+      _ => {
+        // TODO print these (maybe move first up onto the LEVEL LINE?)
+        //  Will need to print timings too, if they exist.
+        f.write_str("<span event: TODO>\n")?;
+      }
     }
 
     for span in self.event.spans.iter().rev() {
@@ -143,3 +149,19 @@ impl PrettyPrinter {
 }
 
 
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use super::super::iter_logfile;
+
+
+
+  #[test]
+  fn pretty_printing() -> anyhow::Result<()> {
+    let p = PrettyPrinter::default();
+    for event in iter_logfile(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test.json")) {
+      p.print(&event?);
+    }
+    Ok(())
+  }
+}

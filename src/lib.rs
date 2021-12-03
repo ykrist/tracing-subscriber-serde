@@ -1,20 +1,20 @@
-#![feature(thread_id_value)]
+#![feature(thread_id_value)] // TODO: make this an opt-in feature
 
 use std::num::NonZeroU64;
 use serde::{Serialize, Deserialize};
 use serde_repr::{Serialize_repr, Deserialize_repr};
 
-
 use std::fmt::{Debug};
 
+mod subscriber;
+pub use subscriber::JsonLayer;
+
+pub mod time;
 use crate::time::{UnixTime, SpanTime};
 
-mod subscriber;
-pub mod time;
-pub mod pprint;
-
-pub use subscriber::JsonLayer;
 use std::collections::HashMap;
+
+pub mod consumer;
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
@@ -59,7 +59,9 @@ pub enum EventKind {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Span {
+  #[serde(alias="n")]
   pub name: String,
+  #[serde(alias="f")]
   pub fields: HashMap<String, FieldValue>
 }
 

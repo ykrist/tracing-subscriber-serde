@@ -1,21 +1,22 @@
 use std::num::NonZeroU64;
+use std::fmt::{Debug, self, Write as FmtWrite};
+use std::io::Write;
+use std::borrow::Cow;
+
 use serde::{Serialize};
 use tracing::{Subscriber, field::Visit, field::Field, span::{Id, Attributes}, Metadata};
 use tracing_subscriber::registry::{LookupSpan, SpanRef};
 use tracing_subscriber::layer::{Context, Layer};
-
-use std::fmt::{Debug, self};
-use std::io::Write;
-use std::borrow::Cow;
 use smallvec::SmallVec;
+use smartstring::alias::String as SString;
 
 use crate::time::{UnixTime, Clock, SpanTime, SpanTimer};
-use crate::FieldValue;
+
 mod serialize;
 use serialize::*;
 
 pub use tracing_subscriber::fmt::MakeWriter;
-use std::cell::{RefCell, RefMut};
+use std::cell::RefCell;
 
 
 trait AddFields {
@@ -65,15 +66,17 @@ impl<T: AddFields> Visit for FieldVisitor<T> {
   fn record_str(&mut self, field: &Field, value: &str) {
     self.0.add_field(
       field.name(),
-      FieldValue::Str(value.to_string())
+      FieldValue::Str(value.into())
     )
   }
 
   /// Visit a value implementing `fmt::Debug`.
   fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+    let mut s = SString::new();
+    write!(&mut s, "{:?}", value).unwrap();
     self.0.add_field(
       field.name(),
-      FieldValue::Str(format!("{:?}", value))
+      FieldValue::Str(s)
     )
   }
 }
