@@ -14,7 +14,7 @@ use std::rc::Rc;
 use smallvec::SmallVec;
 
 mod subscriber;
-mod time;
+pub mod time;
 
 pub use subscriber::JsonLayer;
 use std::collections::HashMap;

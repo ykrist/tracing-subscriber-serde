@@ -1,6 +1,6 @@
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber_json_full::{JsonLayer};
+use tracing_subscriber_json_full::{JsonLayer, time::SystemClock};
 
 // fn type_name_of_val<T>(_: &T) {
 //   println!("{}", std::any::type_name::<T>());
@@ -38,7 +38,11 @@ fn creates_spans_and_events() {
 fn main() -> anyhow::Result<()> {
 
   tracing_subscriber::registry()
-      .with(JsonLayer::new())
+      .with(JsonLayer::new()
+        .with_clock(SystemClock::default())
+        .time_spans(true)
+        .source_location(false)
+        .finish())
       .init();
 
   creates_spans_and_events();

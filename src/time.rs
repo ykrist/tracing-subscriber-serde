@@ -63,12 +63,12 @@ pub trait Clock {
 }
 
 #[derive(Copy, Clone, Default)]
-pub struct SystemTimer {
+pub struct SystemClock {
   _private: ()
 }
 
 
-impl Clock for SystemTimer {
+impl Clock for SystemClock {
   fn get_time(&self) -> Option<UnixTime> {
     SystemTime::now()
       .duration_since(UNIX_EPOCH)

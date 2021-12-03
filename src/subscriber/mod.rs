@@ -77,18 +77,83 @@ impl<T: AddFields> Visit for FieldVisitor<T> {
   }
 }
 
+pub struct JsonLayerBuilder<C, W>(JsonLayer<C, W>);
+
 // TODO : add settings for emitting span enter/exit events, and for span timings
-pub struct JsonLayer<T, W> {
+pub struct JsonLayer<C, W> {
+  source_location: bool,
+  record_span_enter: bool,
+  record_span_exit: bool,
+  record_span_create: bool,
+  record_span_close: bool,
+  time_spans: bool,
   writer: W,
-  timer: T,
+  clock: C,
 }
 
 impl JsonLayer<(), std::io::Stdout> {
-  pub fn new() -> Self {
-    JsonLayer {
+  pub fn new() -> JsonLayerBuilder<(), std::io::Stdout> {
+    JsonLayerBuilder(JsonLayer {
       writer: std::io::stdout(),
-      timer: (),
-    }
+      clock: (),
+      source_location: true,
+      record_span_create: false,
+      record_span_close: false,
+      record_span_enter: false,
+      record_span_exit: false,
+      time_spans: true,
+    })
+  }
+}
+
+impl<C: Clock, W> JsonLayerBuilder<C, W> {
+  pub fn with_clock<C2: Clock>(self, clock: C2) -> JsonLayerBuilder<C2, W> {
+    let l = self.0;
+    JsonLayerBuilder(JsonLayer{
+      source_location: l.source_location,
+      record_span_enter: l.record_span_enter,
+      record_span_exit: l.record_span_exit,
+      record_span_create: l.record_span_create,
+      record_span_close: l.record_span_close,
+      time_spans: l.time_spans,
+      writer: l.writer,
+      clock,
+    })
+  }
+  pub fn time_spans(mut self, enable: bool) -> Self {
+    self.0.time_spans = enable;
+    self
+  }
+
+  pub fn span_create(mut self, record: bool) -> Self {
+    self.0.record_span_create = record;
+    self
+  }
+
+  pub fn span_close(mut self, record: bool) -> Self {
+    self.0.record_span_close = record;
+    self
+  }
+
+  pub fn span_enter(mut self, record: bool) -> Self {
+    self.0.record_span_enter = record;
+    self
+  }
+
+  pub fn span_exit(mut self, record: bool) -> Self {
+    self.0.record_span_exit = record;
+    self
+  }
+
+
+  pub fn source_location(mut self, include: bool) -> Self {
+    self.0.source_location = include;
+    self
+  }
+
+  pub fn finish(mut self) -> JsonLayer<C, W> {
+    self.0.record_span_close |= self.0.time_spans;
+    self.0
   }
 }
 
@@ -100,15 +165,18 @@ impl<T: Clock, W: Write> JsonLayer<T, W> {
       .map(Cow::Borrowed)
       .unwrap_or_else(|| Cow::Owned(format!("{:?}", thread.id())));
 
+    let (src_file, src_line) =
+      if self.source_location { (meta.file(), meta.line()) }
+      else { (None, None) };
+
     let event = Event {
       level: (*meta.level()).into(),
       kind: e,
       spans,
       target: meta.target(),
-
-      src_file: meta.file(),
-      src_line: meta.line(),
-      time: self.timer.get_time(),
+      src_file,
+      src_line,
+      time: self.clock.get_time(),
 
       thread_id: Some(thread.id().as_u64()),
       thread_name: Some(thread_name.as_ref()),
@@ -142,10 +210,13 @@ impl<T, W, S> Layer<S> for JsonLayer<T, W>
 {
   fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
     let s = ctx.span(id).expect(PANIC_MSG_SPAN_NOT_FOUND);
-    let meta = s.metadata();
     let mut extensions = s.extensions_mut();
-
-    let mut spanlist = Spans::current(&ctx);
+    let meta = s.metadata();
+    let mut spanlist = if self.record_span_create {
+      Some(Spans::current(&ctx))
+    } else {
+      None
+    };
 
     if extensions.get_mut::<Spans>().is_none() {
       let mut span = Spans::default();
@@ -153,13 +224,23 @@ impl<T, W, S> Layer<S> for JsonLayer<T, W>
       let mut visitor = FieldVisitor(span);
       attrs.record(&mut visitor);
       let span = visitor.finish();
-      spanlist.append_child(&span);
+      if let Some(ref mut spanlist) = spanlist {
+        spanlist.append_child(&span);
+      }
       extensions.insert(span.clone());
     } else{
-      spanlist.append_child(extensions.get_mut::<Spans>().unwrap());
+      if let Some(ref mut spanlist) = spanlist {
+        spanlist.append_child(extensions.get_mut::<Spans>().unwrap());
+      }
     }
-    // FIXME store timing info
-    self.emit_event(meta, spanlist, EventKind::SpanCreate);
+
+    if self.time_spans && extensions.get_mut::<SpanTimer>().is_none() {
+      extensions.insert(SpanTimer::new());
+    }
+
+    if let Some(spanlist) = spanlist.take() {
+      self.emit_event(meta, spanlist, EventKind::SpanCreate);
+    }
   }
 
 
@@ -175,23 +256,43 @@ impl<T, W, S> Layer<S> for JsonLayer<T, W>
 
   /// Notifies this layer that a span with the given ID was entered.
   fn on_enter(&self, id: &Id, ctx: Context<'_, S>) {
-    let meta = ctx.metadata(id).expect(PANIC_MSG_SPAN_NOT_FOUND);
-    let spans = Spans::current(&ctx);
-    self.emit_event(meta, spans, EventKind::SpanEnter)
+    if self.record_span_enter || self.time_spans {
+      let s = ctx.span(&id).expect(PANIC_MSG_SPAN_NOT_FOUND);
+
+      if self.record_span_enter {
+        let spans = Spans::current(&ctx);
+        self.emit_event(s.metadata(), spans, EventKind::SpanEnter);
+      }
+
+      if let Some(t) = s.extensions_mut().get_mut::<SpanTimer>() {
+        t.start_busy();
+      };
+    }
   }
 
   /// Notifies this layer that the span with the given ID was exited.
   fn on_exit(&self, id: &Id, ctx: Context<'_, S>) {
-    let s = ctx.span(id).expect(PANIC_MSG_SPAN_NOT_FOUND);
-    let spans = build_leave_span(&ctx, &s);
-    self.emit_event(s.metadata(), spans, EventKind::SpanExit)
+    if self.record_span_exit || self.time_spans {
+      let s = ctx.span(id).expect(PANIC_MSG_SPAN_NOT_FOUND);
+
+      if self.record_span_exit {
+        let spans = build_leave_span(&ctx, &s);
+        self.emit_event(s.metadata(), spans, EventKind::SpanExit);
+      }
+
+      if let Some(t) = s.extensions_mut().get_mut::<SpanTimer>() {
+        t.end_busy();
+      };
+    }
   }
 
   /// Notifies this layer that the span with the given ID has been closed.
   fn on_close(&self, id: Id, ctx: Context<'_, S>) {
-    let s = ctx.span(&id).expect(PANIC_MSG_SPAN_NOT_FOUND);
-    let spans = build_leave_span(&ctx, &s);
-    self.emit_event(s.metadata(), spans, EventKind::SpanClose(None))
+    if self.record_span_close {
+      let s = ctx.span(&id).expect(PANIC_MSG_SPAN_NOT_FOUND);
+      let spans = build_leave_span(&ctx, &s);
+      let times = s.extensions().get::<SpanTimer>().map(SpanTimer::finish);
+      self.emit_event(s.metadata(), spans, EventKind::SpanClose(times))
+    }
   }
-
 }
