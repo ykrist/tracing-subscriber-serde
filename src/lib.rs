@@ -15,6 +15,7 @@ use smallvec::SmallVec;
 
 mod subscriber;
 pub mod time;
+pub mod pprint;
 
 pub use subscriber::JsonLayer;
 use std::collections::HashMap;
