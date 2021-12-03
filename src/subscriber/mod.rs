@@ -15,6 +15,7 @@ mod serialize;
 use serialize::*;
 
 pub use tracing_subscriber::fmt::MakeWriter;
+use std::cell::{RefCell, RefMut};
 
 
 trait AddFields {
@@ -184,6 +185,8 @@ impl<C, W> JsonLayer<C, W>
     W: for<'w> MakeWriter<'w>
 {
   fn emit_event<'a>(&self, meta: &Metadata<'a>, spans: Spans<'a>, e: EventKind<'a>) {
+    thread_local! {static BUFFER : RefCell<Vec<u8>> = RefCell::new(Vec::with_capacity(0x1000)) }
+    
     let thread = std::thread::current();
 
     let thread_name = thread.name()
@@ -207,22 +210,31 @@ impl<C, W> JsonLayer<C, W>
       thread_name: Some(thread_name.as_ref()),
     };
 
+
     let mut writer = self.writer.make_writer_for(meta);
+    BUFFER.with(|buf: &RefCell<_>| {
+      let mut buf = &mut *buf.borrow_mut();
+      serde_json::to_writer(&mut buf, &event).unwrap();
+      buf.push('\n' as u8);
+      writer.write_all(buf).unwrap();
+      buf.clear();
+    })
+    // writer.write("\n".as_bytes()).unwrap();
 
-    #[cfg(debug_assertions)] {
-      serde_json::to_writer(&mut writer, &event).unwrap();
-      writer.write("\n".as_bytes()).unwrap();
-    }
-
-    #[cfg(not(debug_assertions))] {
-      if let Err(e) = serde_json::to_writer(&mut writer, &event) {
-        eprintln!("bug: error serializing event: {}", e);
-      } else {
-        if let Err(e) = writer.write("\n".as_bytes()) {
-          eprintln!("I/O error: {}", &e);
-        }
-      }
-    }
+    // #[cfg(debug_assertions)] {
+    //   serde_json::to_writer(&mut writer, &event).unwrap();
+    //   writer.write("\n".as_bytes()).unwrap();
+    // }
+    //
+    // #[cfg(not(debug_assertions))] {
+    //   if let Err(e) = serde_json::to_writer(&mut writer, &event) {
+    //     eprintln!("bug: error serializing event: {}", e);
+    //   } else {
+    //     if let Err(e) = writer.write("\n".as_bytes()) {
+    //       eprintln!("I/O error: {}", &e);
+    //     }
+    //   }
+    // }
   }
 }
 
