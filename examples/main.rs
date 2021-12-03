@@ -1,5 +1,6 @@
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber_json_full::{JsonLayer, time::SystemClock};
 
 // fn type_name_of_val<T>(_: &T) {
@@ -43,6 +44,7 @@ fn main() -> anyhow::Result<()> {
         .time_spans(true)
         .source_location(false)
         .finish())
+      .with(EnvFilter::from_default_env())
       .init();
 
   creates_spans_and_events();

@@ -1,21 +1,21 @@
 use std::num::NonZeroU64;
-use serde::{Serialize, Deserialize};
-use serde_repr::{Serialize_repr, Deserialize_repr};
-use tracing::{Subscriber, field::Visit, field::Field, span::{Id, Attributes}, Metadata, Span};
-use tracing_subscriber::registry::{LookupSpan, SpanRef, Extensions};
+use serde::{Serialize};
+use tracing::{Subscriber, field::Visit, field::Field, span::{Id, Attributes}, Metadata};
+use tracing_subscriber::registry::{LookupSpan, SpanRef};
 use tracing_subscriber::layer::{Context, Layer};
 
-use std::fmt::{Debug, self, Display};
-use std::borrow::Cow;
-
-use std::rc::Rc;
-use smallvec::SmallVec;
+use std::fmt::{Debug, self};
 use std::io::Write;
+use std::borrow::Cow;
+use smallvec::SmallVec;
 
 use crate::time::{UnixTime, Clock, SpanTime, SpanTimer};
 use crate::FieldValue;
 mod serialize;
 use serialize::*;
+
+pub use tracing_subscriber::fmt::MakeWriter;
+
 
 trait AddFields {
   fn add_field(&mut self, name: &'static str, val: FieldValue);
@@ -79,7 +79,7 @@ impl<T: AddFields> Visit for FieldVisitor<T> {
 
 pub struct JsonLayerBuilder<C, W>(JsonLayer<C, W>);
 
-// TODO : add settings for emitting span enter/exit events, and for span timings
+
 pub struct JsonLayer<C, W> {
   source_location: bool,
   record_span_enter: bool,
@@ -91,10 +91,10 @@ pub struct JsonLayer<C, W> {
   clock: C,
 }
 
-impl JsonLayer<(), std::io::Stdout> {
-  pub fn new() -> JsonLayerBuilder<(), std::io::Stdout> {
+impl JsonLayer<(), fn() -> std::io::Stdout> {
+  pub fn new() -> JsonLayerBuilder<(),  fn() -> std::io::Stdout> {
     JsonLayerBuilder(JsonLayer {
-      writer: std::io::stdout(),
+      writer: std::io::stdout,
       clock: (),
       source_location: true,
       record_span_create: false,
@@ -106,7 +106,28 @@ impl JsonLayer<(), std::io::Stdout> {
   }
 }
 
-impl<C: Clock, W> JsonLayerBuilder<C, W> {
+impl<C, W> JsonLayerBuilder<C, W>
+where
+  C: Clock,
+  W: for<'w> MakeWriter<'w>
+{
+  pub fn with_writer<W2>(self, writer: W2) -> JsonLayerBuilder<C, W2>
+    where
+      W2: for<'x> MakeWriter<'x>
+  {
+    let l = self.0;
+    JsonLayerBuilder(JsonLayer{
+      source_location: l.source_location,
+      record_span_enter: l.record_span_enter,
+      record_span_exit: l.record_span_exit,
+      record_span_create: l.record_span_create,
+      record_span_close: l.record_span_close,
+      time_spans: l.time_spans,
+      writer,
+      clock: l.clock,
+    })
+  }
+
   pub fn with_clock<C2: Clock>(self, clock: C2) -> JsonLayerBuilder<C2, W> {
     let l = self.0;
     JsonLayerBuilder(JsonLayer{
@@ -157,7 +178,11 @@ impl<C: Clock, W> JsonLayerBuilder<C, W> {
   }
 }
 
-impl<T: Clock, W: Write> JsonLayer<T, W> {
+impl<C, W> JsonLayer<C, W>
+  where
+    C: Clock,
+    W: for<'w> MakeWriter<'w>
+{
   fn emit_event<'a>(&self, meta: &Metadata<'a>, spans: Spans<'a>, e: EventKind<'a>) {
     let thread = std::thread::current();
 
@@ -182,8 +207,22 @@ impl<T: Clock, W: Write> JsonLayer<T, W> {
       thread_name: Some(thread_name.as_ref()),
     };
 
-    let s = serde_json::to_string(&event).unwrap();
-    println!("{}", s);
+    let mut writer = self.writer.make_writer_for(meta);
+
+    #[cfg(debug_assertions)] {
+      serde_json::to_writer(&mut writer, &event).unwrap();
+      writer.write("\n".as_bytes()).unwrap();
+    }
+
+    #[cfg(not(debug_assertions))] {
+      if let Err(e) = serde_json::to_writer(&mut writer, &event) {
+        eprintln!("bug: error serializing event: {}", e);
+      } else {
+        if let Err(e) = writer.write("\n".as_bytes()) {
+          eprintln!("I/O error: {}", &e);
+        }
+      }
+    }
   }
 }
 
@@ -201,12 +240,11 @@ where
 }
 
 
-impl<T, W, S> Layer<S> for JsonLayer<T, W>
-  where
-    T: Clock + 'static,
-    W: Write + 'static,
-    S: Subscriber + for<'l> LookupSpan<'l>
-
+impl<C, W, S> Layer<S> for JsonLayer<C, W>
+    where
+    C: Clock + 'static,
+    W: for<'w> MakeWriter<'w> + 'static,
+    S: Subscriber + for<'l> LookupSpan<'l>,
 {
   fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
     let s = ctx.span(id).expect(PANIC_MSG_SPAN_NOT_FOUND);

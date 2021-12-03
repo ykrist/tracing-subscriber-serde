@@ -3,15 +3,11 @@
 use std::num::NonZeroU64;
 use serde::{Serialize, Deserialize};
 use serde_repr::{Serialize_repr, Deserialize_repr};
-use tracing::{Subscriber, field::Visit, field::Field, span::{Id, Attributes}, Metadata};
-use tracing_subscriber::registry::{LookupSpan, SpanRef, Extensions};
-use tracing_subscriber::layer::{Context, Layer};
 
-use std::fmt::{Debug, self, Display};
-use std::borrow::Cow;
-use crate::time::{UnixTime, Clock, SpanTime, SpanTimer};
-use std::rc::Rc;
-use smallvec::SmallVec;
+
+use std::fmt::{Debug};
+
+use crate::time::{UnixTime, SpanTime};
 
 mod subscriber;
 pub mod time;

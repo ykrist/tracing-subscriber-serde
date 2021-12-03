@@ -55,7 +55,7 @@ impl fmt::Display for FmtEvent<'_> {
           self.printer.fmt_fieldvalue(f, msg)?;
           f.write_str("\n")?;
           if fields.len() > 1 {
-            f.write_str(CONT);
+            f.write_str(CONT)?;
             self.printer.fmt_fields(f, fields.iter().filter(|(n, _)| n.as_str() != "message"))?;
             f.write_str("\n")?;
           }
