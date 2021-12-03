@@ -2,10 +2,8 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber_json_full::{JsonLayer, time::SystemClock};
-
-// fn type_name_of_val<T>(_: &T) {
-//   println!("{}", std::any::type_name::<T>());
-// }
+use std::io::Cursor;
+use std::sync::Mutex;
 
 fn creates_spans_and_events() {
   use tracing::*;
@@ -23,18 +21,7 @@ fn creates_spans_and_events() {
   }
 }
 
-//
-// fn read_and_print_log() -> anyhow::Result<()> {
-//   let file = std::fs::File::open(LOG_FILE)?;
-//   let stream = EventStream::new().reader(file);
-//
-//   let p = PrettyPrinter::default();
-//
-//   for event in stream {
-//     p.print(&event?);
-//   }
-//   Ok(())
-// }
+
 
 fn main() -> anyhow::Result<()> {
 
@@ -43,6 +30,7 @@ fn main() -> anyhow::Result<()> {
         .with_clock(SystemClock::default())
         .time_spans(true)
         .source_location(false)
+        .with_writer(Mutex::new(Cursor::new(Vec::<u8>::new())))
         .finish())
       .with(EnvFilter::from_default_env())
       .init();
