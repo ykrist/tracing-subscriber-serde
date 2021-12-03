@@ -7,6 +7,7 @@ use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber_json_full::JsonLayer;
 use tracing::Subscriber;
+use tracing_appender::non_blocking::{WorkerGuard, NonBlocking, NonBlockingBuilder};
 
 pub struct InMemoryWriter {
   inner: Arc<Mutex<Vec<u8>>>,
@@ -19,10 +20,11 @@ pub struct InMemoryWriterFlushGuard {
 
 
 const MB: usize = 0xfffff;
+const WRITE_BUF_SIZE : usize = 200 * MB;
 
 impl InMemoryWriter {
   pub fn new(p: Option<impl AsRef<Path>>) -> (Self, Option<InMemoryWriterFlushGuard>) {
-    let inner = Arc::new(Mutex::new(Vec::with_capacity(200 * MB)));
+    let inner = Arc::new(Mutex::new(Vec::with_capacity(WRITE_BUF_SIZE)));
     let g = p.map(|p| InMemoryWriterFlushGuard {
       dest: p.as_ref().to_path_buf(),
       inner: Arc::clone(&inner),
@@ -48,6 +50,44 @@ impl Drop for InMemoryWriterFlushGuard {
   }
 }
 
+
+
+pub fn setup_tsjson_nb() -> (impl Subscriber + Send + Sync + 'static, WorkerGuard) {
+  let (writer, g) = NonBlockingBuilder::default()
+    .lossy(false)
+    .finish(Vec::<u8>::with_capacity(WRITE_BUF_SIZE));
+
+  let l = tracing_subscriber::fmt::Layer::new()
+    .json()
+    .with_target(true)
+    .with_span_list(true)
+    .with_current_span(false)
+    .with_span_events(FmtSpan::FULL)
+    .with_writer(writer);
+
+  let s = tracing_subscriber::registry().with(l);
+  (s, g)
+}
+
+
+pub fn setup_jsonfull_nb() -> (impl Subscriber + Send + Sync + 'static, WorkerGuard) {
+  let (writer, g) = NonBlockingBuilder::default()
+    .lossy(false)
+    .finish(Vec::<u8>::with_capacity(WRITE_BUF_SIZE));
+
+  let s = tracing_subscriber::registry()
+    .with(JsonLayer::new()
+      .with_writer(writer)
+      .with_clock(tracing_subscriber_json_full::time::SystemClock::default())
+      .source_location(false)
+      .span_exit(true)
+      .span_create(true)
+      .span_close(true)
+      .span_enter(true)
+      .finish()
+    );
+  (s, g)
+}
 
 pub fn setup_tsjson(filepath: Option<impl AsRef<Path>>) -> (impl Subscriber + Send + Sync + 'static, Option<InMemoryWriterFlushGuard>) {
   let (writer, g) = InMemoryWriter::new(filepath);
