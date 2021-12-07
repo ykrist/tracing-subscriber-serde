@@ -1,5 +1,3 @@
-
-
 use rtrb::{Producer, Consumer, RingBuffer};
 use std::sync::mpsc::{Receiver, Sender, SyncSender};
 use std::io::{Write, self};
@@ -40,11 +38,15 @@ impl Builder {
     self
   }
 
+  pub fn lossy(mut self, lossy: bool) -> Self {
+    self.lossy = lossy;
+    self
+  }
+
   pub fn finish<W: Write + Send + 'static>(self, writer: W) -> WriterHandle {
     let (prod, cons) = RingBuffer::new(self.buf_size);
-    assert!(self.buf_size >= self.min_write_size);
-
-    let handle = WriterThread::spawn(writer, cons, self.min_write_size);
+    let min_write_size = self.min_write_size.min(self.buf_size);
+    let handle = WriterThread::spawn(writer, cons, min_write_size);
     WriterHandle::new(prod, handle, self.lossy)
   }
 }
@@ -102,11 +104,12 @@ mod writer_handle {
 
       let mut avail = match write_slice_exact(writer_thread, ringbuf, buf) {
         Ok(()) => return,
-        Err(ChunkError::TooFewSlots(_)) if self.lossy => return, // Non-blocking behaviour
+        Err(ChunkError::TooFewSlots(_)) if self.lossy => {
+          *num_dropped = num_dropped.saturating_add(1);
+          return
+        }, // Non-blocking behaviour
         Err(ChunkError::TooFewSlots(n)) => n,
       };
-
-      let mut buf = buf;
 
       while !buf.is_empty() {
         if avail == 0 {
@@ -122,7 +125,13 @@ mod writer_handle {
         // eprintln!("{:?}", buf)
       }
     }
+
+    #[allow(dead_code)]
+    pub(super) fn writes_dropped(&self) -> u32 {
+      self.inner.borrow().num_dropped
+    }
   }
+
 
   impl Drop for WriterHandle {
     fn drop(&mut self) {
@@ -252,13 +261,15 @@ impl<W: Write + Send + 'static> WriterThread<W> {
         // the while loop and we simply need to notify the other end that there is
         // space in the buffer again.
         debug_assert!(self.buf.slots() < self.buf.buffer().capacity());
-        self.space_available.send(());
+        if self.space_available.send(()).is_err() {
+          break // other end has most likely panicked
+        }
       }
     }
 
     // Sender has hung up, indicating we should flush and close the file.
     self.flush_buffer();
-    self.writer.flush();
+    Self::handle_io_err(self.writer.flush());
   }
 }
 
@@ -266,7 +277,7 @@ impl<W: Write + Send + 'static> WriterThread<W> {
 mod tests {
   use super::*;
   use std::sync::{Mutex, Arc};
-  use std::cmp::min;
+  use std::time::Duration;
 
   type Buffer = Arc<Mutex<Vec<u8>>>;
 
@@ -364,7 +375,6 @@ mod tests {
     let buffer = Arc::clone(&writer.buffer);
     let handle = nonblocking()
       .buf_size(12)
-      .min_write_size(12)
       .finish(writer);
 
     let data = payload(100);
@@ -377,4 +387,31 @@ mod tests {
     check_same(&buffer, &data);
   }
 
+  #[test]
+  fn drops_logs_when_full() {
+    let writer = TestWriter::new(None, None);
+    let buffer = Arc::clone(&writer.buffer);
+    let handle = nonblocking()
+      .lossy(true)
+      .buf_size(1)
+      .finish(writer);
+
+    let data = vec![0; 10];
+    for chunk in data.chunks(2) {
+      handle.write(&chunk);
+    }
+
+    assert_eq!(handle.writes_dropped(), 5);
+
+    let data = payload(10);
+    for chunk in data.chunks(1) {
+      handle.write(&chunk);
+      std::thread::sleep(Duration::from_millis(10))
+    }
+
+    assert_eq!(handle.writes_dropped(), 5);
+    drop(handle);
+
+    check_same(&buffer, &data);
+  }
 }

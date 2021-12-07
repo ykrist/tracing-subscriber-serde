@@ -9,9 +9,9 @@ mod bench_utils;
 
 #[test]
 fn inmemory_writes_to_file() {
-  let (mut writer, g) = bench_utils::InMemoryWriter::new(Some("test.txt"));
+  let (writer, g) = bench_utils::InMemoryWriter::new(Some("test.txt"));
   let mut w = writer.make_writer();
-  writeln!(&mut w, "hello world");
+  writeln!(&mut w, "hello world").unwrap();
   drop(w);
   drop(writer);
   if Path::new("test.txt").exists() {
@@ -41,7 +41,6 @@ fn same_number_of_records() {
 
   assert_eq!(ts_json.lines().count(), full_json.lines().count());
 
-  // std::fs::remove_file("ts.json").ok();
-  // std::fs::remove_file("full.json").ok();
-
+  std::fs::remove_file("ts.json").ok();
+  std::fs::remove_file("full.json").ok();
 }

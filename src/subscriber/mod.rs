@@ -2,22 +2,23 @@ use std::num::NonZeroU64;
 use std::fmt::{Debug, self, Write as FmtWrite};
 use std::io::Write;
 use std::borrow::Cow;
+use std::cell::RefCell;
 
 use serde::{Serialize};
 use tracing::{Subscriber, field::Visit, field::Field, span::{Id, Attributes}, Metadata};
 use tracing_subscriber::registry::{LookupSpan, SpanRef};
 use tracing_subscriber::layer::{Context, Layer};
+
+pub use tracing_subscriber::fmt::MakeWriter;
+
 use smallvec::SmallVec;
 use smartstring::alias::String as SString;
 
 use crate::time::{UnixTime, Clock, SpanTime, SpanTimer};
+use crate::FmtSpan;
 
 mod serialize;
 use serialize::*;
-
-pub use tracing_subscriber::fmt::MakeWriter;
-use std::cell::RefCell;
-
 
 trait AddFields {
   fn add_field(&mut self, name: &'static str, val: FieldValue);
@@ -81,7 +82,13 @@ impl<T: AddFields> Visit for FieldVisitor<T> {
   }
 }
 
-pub struct JsonLayerBuilder<C, W>(JsonLayer<C, W>);
+pub struct JsonLayerBuilder<C, W> {
+  source_location: bool,
+  span_events: FmtSpan,
+  time_spans: bool,
+  writer: W,
+  clock: C
+}
 
 
 pub struct JsonLayer<C, W> {
@@ -97,16 +104,13 @@ pub struct JsonLayer<C, W> {
 
 impl JsonLayer<(), fn() -> std::io::Stdout> {
   pub fn new() -> JsonLayerBuilder<(),  fn() -> std::io::Stdout> {
-    JsonLayerBuilder(JsonLayer {
+    JsonLayerBuilder{
       writer: std::io::stdout,
       clock: (),
       source_location: true,
-      record_span_create: false,
-      record_span_close: false,
-      record_span_enter: false,
-      record_span_exit: false,
       time_spans: true,
-    })
+      span_events: FmtSpan::NONE
+    }
   }
 }
 
@@ -119,66 +123,57 @@ where
     where
       W2: for<'x> MakeWriter<'x>
   {
-    let l = self.0;
-    JsonLayerBuilder(JsonLayer{
-      source_location: l.source_location,
-      record_span_enter: l.record_span_enter,
-      record_span_exit: l.record_span_exit,
-      record_span_create: l.record_span_create,
-      record_span_close: l.record_span_close,
-      time_spans: l.time_spans,
+    JsonLayerBuilder{
+      source_location: self.source_location,
+      span_events: self.span_events,
+      time_spans: self.time_spans,
       writer,
-      clock: l.clock,
-    })
+      clock: self.clock,
+    }
   }
 
   pub fn with_clock<C2: Clock>(self, clock: C2) -> JsonLayerBuilder<C2, W> {
-    let l = self.0;
-    JsonLayerBuilder(JsonLayer{
-      source_location: l.source_location,
-      record_span_enter: l.record_span_enter,
-      record_span_exit: l.record_span_exit,
-      record_span_create: l.record_span_create,
-      record_span_close: l.record_span_close,
-      time_spans: l.time_spans,
-      writer: l.writer,
+    JsonLayerBuilder{
+      source_location: self.source_location,
+      span_events: self.span_events,
+      time_spans: self.time_spans,
+      writer: self.writer,
       clock,
-    })
+    }
   }
   pub fn time_spans(mut self, enable: bool) -> Self {
-    self.0.time_spans = enable;
+    self.time_spans = enable;
     self
   }
 
-  pub fn span_create(mut self, record: bool) -> Self {
-    self.0.record_span_create = record;
-    self
-  }
-
-  pub fn span_close(mut self, record: bool) -> Self {
-    self.0.record_span_close = record;
-    self
-  }
-
-  pub fn span_enter(mut self, record: bool) -> Self {
-    self.0.record_span_enter = record;
-    self
-  }
-
-  pub fn span_exit(mut self, record: bool) -> Self {
-    self.0.record_span_exit = record;
+  pub fn with_span_events(mut self, e: FmtSpan) -> Self {
+    self.span_events = e;
     self
   }
 
 
   pub fn source_location(mut self, include: bool) -> Self {
-    self.0.source_location = include;
+    self.source_location = include;
     self
   }
 
-  pub fn finish(mut self) -> JsonLayer<C, W> {
-    self.0.record_span_close |= self.0.time_spans;
-    self.0
+  pub fn finish(self) -> JsonLayer<C, W> {
+    macro_rules! bit_is_set {
+        ($x:expr, $bit:path) => {
+          $x.clone() & $bit.clone() == $bit.clone()
+        };
+    }
+
+    JsonLayer {
+      record_span_create: bit_is_set!(self.span_events, FmtSpan::NEW),
+      record_span_close: bit_is_set!(self.span_events, FmtSpan::CLOSE),
+      record_span_enter: bit_is_set!(self.span_events, FmtSpan::ENTER),
+      record_span_exit: bit_is_set!(self.span_events, FmtSpan::EXIT),
+      source_location: self.source_location,
+      time_spans: self.time_spans,
+      writer: self.writer,
+      clock: self.clock,
+    }
   }
 }
 

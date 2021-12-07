@@ -9,6 +9,7 @@ use std::fmt::{Debug};
 
 mod subscriber;
 pub use subscriber::JsonLayer;
+pub use tracing_subscriber::fmt::format::FmtSpan;
 
 pub mod time;
 use crate::time::{UnixTime, SpanTime};
@@ -16,7 +17,9 @@ use crate::time::{UnixTime, SpanTime};
 use std::collections::HashMap;
 
 pub mod consumer;
+
 mod nonblocking;
+pub use nonblocking::nonblocking;
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
@@ -105,14 +108,4 @@ pub struct Event {
   #[serde(alias="tm")]
   #[serde(skip_serializing_if="Option::is_none")]
   pub time: Option<UnixTime>
-}
-
-// TODO move pretty printer back here
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-  use std::mem::size_of;
-
-
 }

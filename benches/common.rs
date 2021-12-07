@@ -7,7 +7,7 @@ use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber_json_full::JsonLayer;
 use tracing::Subscriber;
-use tracing_appender::non_blocking::{WorkerGuard, NonBlocking, NonBlockingBuilder};
+use tracing_appender::non_blocking::{WorkerGuard, NonBlockingBuilder};
 
 pub struct InMemoryWriter {
   inner: Arc<Mutex<Vec<u8>>>,
@@ -80,10 +80,7 @@ pub fn setup_jsonfull_nb() -> (impl Subscriber + Send + Sync + 'static, WorkerGu
       .with_writer(writer)
       .with_clock(tracing_subscriber_json_full::time::SystemClock::default())
       .source_location(false)
-      .span_exit(true)
-      .span_create(true)
-      .span_close(true)
-      .span_enter(true)
+      .with_span_events(FmtSpan::FULL)
       .finish()
     );
   (s, g)
@@ -113,10 +110,7 @@ pub fn setup_jsonfull(filepath: Option<impl AsRef<Path>>) -> (impl Subscriber + 
       .with_writer(writer)
       .with_clock(tracing_subscriber_json_full::time::SystemClock::default())
       .source_location(false)
-      .span_exit(true)
-      .span_create(true)
-      .span_close(true)
-      .span_enter(true)
+      .with_span_events(FmtSpan::FULL)
       .finish()
     );
   (s, g)
@@ -166,12 +160,3 @@ pub mod workloads {
   }
 
 }
-
-// pub fn creates_spans_and_events(iters: usize) {
-//   use tracing::*;
-//
-//   let _outer = warn_span!("outer", x=6).entered();
-//   // let _a = error_span!("a", i, p="egg").entered();
-//   trace!("no egg");
-//   // drop(_a);
-// }
