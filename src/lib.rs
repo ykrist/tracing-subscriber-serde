@@ -1,4 +1,5 @@
-#![feature(thread_id_value)] // TODO: make this an opt-in feature
+#![feature(thread_id_value)] // TODO: make this an opt-in feature, fallback to None
+#![feature(maybe_uninit_write_slice)] // TODO: make non-blocking an opt-in feature
 
 use std::num::NonZeroU64;
 use serde::{Serialize, Deserialize};
@@ -15,6 +16,7 @@ use crate::time::{UnixTime, SpanTime};
 use std::collections::HashMap;
 
 pub mod consumer;
+mod nonblocking;
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
