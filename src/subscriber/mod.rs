@@ -1,15 +1,13 @@
 use std::num::NonZeroU64;
 use std::fmt::{Debug, self, Write as FmtWrite};
-use std::io::Write;
+use std::io::{Write, Stdout};
 use std::borrow::Cow;
-use std::cell::RefCell;
 
 use serde::{Serialize};
-use tracing::{Subscriber, field::Visit, field::Field, span::{Id, Attributes}, Metadata};
+use tracing::{warn, Subscriber, field::Visit, field::Field, span::{Id, Attributes}, Metadata};
 use tracing_subscriber::registry::{LookupSpan, SpanRef};
 use tracing_subscriber::layer::{Context, Layer};
 
-pub use tracing_subscriber::fmt::MakeWriter;
 
 use smallvec::SmallVec;
 use smartstring::alias::String as SString;
@@ -19,6 +17,7 @@ use crate::FmtSpan;
 
 mod serialize;
 use serialize::*;
+use crate::nonblocking::WriteRecord;
 
 trait AddFields {
   fn add_field(&mut self, name: &'static str, val: FieldValue);
@@ -82,31 +81,83 @@ impl<T: AddFields> Visit for FieldVisitor<T> {
   }
 }
 
-pub struct JsonLayerBuilder<C, W> {
+
+pub struct SerdeLayerBuilder<F, C, W> {
   source_location: bool,
   span_events: FmtSpan,
   time_spans: bool,
+  fmt: F,
   writer: W,
-  clock: C
+  clock: C,
+  thread_name: bool,
+  thread_id: bool,
 }
 
 
-pub struct JsonLayer<C, W> {
+pub struct SerdeLayer<F, C, W> {
+  thread_name: bool,
+  thread_id: bool,
   source_location: bool,
   record_span_enter: bool,
   record_span_exit: bool,
   record_span_create: bool,
   record_span_close: bool,
   time_spans: bool,
+  fmt: F,
   writer: W,
   clock: C,
 }
 
-impl JsonLayer<(), fn() -> std::io::Stdout> {
-  pub fn new() -> JsonLayerBuilder<(),  fn() -> std::io::Stdout> {
-    JsonLayerBuilder{
-      writer: std::io::stdout,
+pub trait SerdeFormat {
+  fn message_size_hint(&self) -> usize;
+
+  fn serialize(&self, buf: impl Write, record: impl Serialize);
+}
+
+impl<'a, T: SerdeFormat> SerdeFormat for &'a T {
+  fn message_size_hint(&self) -> usize { T::message_size_hint(self) }
+
+  fn serialize(&self, buf: impl Write, record: impl Serialize) {
+    T::serialize(self, buf, record)
+  }
+}
+
+
+#[derive(Copy, Clone, Debug)]
+pub struct JsonFormat;
+
+impl SerdeFormat for JsonFormat {
+  fn message_size_hint(&self) -> usize { 512 }
+
+  fn serialize(&self, mut buf: impl Write, record: impl Serialize) {
+    #[cfg(debug_assertions)] {
+      serde_json::to_writer(&mut buf, &record).unwrap();
+      buf.write("\n".as_bytes()).unwrap();
+    }
+
+    #[cfg(not(debug_assertions))] {
+      if let Err(e) = serde_json::to_writer(&mut writer, &record) {
+        eprintln!("bug: error serializing event: {}", e);
+      } else {
+        if let Err(e) = buf.write("\n".as_bytes()) {
+          eprintln!("I/O error: {}", &e);
+        }
+      }
+    }
+  }
+}
+
+
+
+
+impl SerdeLayer<JsonFormat, (), Stdout> {
+  pub fn new() -> SerdeLayerBuilder<JsonFormat, (), Stdout> {
+    SerdeLayerBuilder {
+      thread_name: false,
+      thread_id: false,
+      writer: std::io::stdout(),
       clock: (),
+      fmt: JsonFormat,
       source_location: true,
       time_spans: true,
       span_events: FmtSpan::NONE
@@ -114,33 +165,41 @@ impl JsonLayer<(), fn() -> std::io::Stdout> {
   }
 }
 
-impl<C, W> JsonLayerBuilder<C, W>
+impl<F, C, W> SerdeLayerBuilder<F, C, W>
 where
+  F: SerdeFormat,
   C: Clock,
-  W: for<'w> MakeWriter<'w>
+  W: WriteRecord,
 {
-  pub fn with_writer<W2>(self, writer: W2) -> JsonLayerBuilder<C, W2>
+  pub fn with_writer<W2>(self, writer: W2) -> SerdeLayerBuilder<F, C, W2>
     where
-      W2: for<'x> MakeWriter<'x>
+      W2: WriteRecord
   {
-    JsonLayerBuilder{
+    SerdeLayerBuilder {
+      thread_name: self.thread_name,
+      thread_id: self.thread_name,
       source_location: self.source_location,
       span_events: self.span_events,
       time_spans: self.time_spans,
       writer,
+      fmt: self.fmt,
       clock: self.clock,
     }
   }
 
-  pub fn with_clock<C2: Clock>(self, clock: C2) -> JsonLayerBuilder<C2, W> {
-    JsonLayerBuilder{
+  pub fn with_clock<C2: Clock>(self, clock: C2) -> SerdeLayerBuilder<F, C2, W> {
+    SerdeLayerBuilder {
+      thread_name: self.thread_name,
+      thread_id: self.thread_name,
       source_location: self.source_location,
       span_events: self.span_events,
       time_spans: self.time_spans,
       writer: self.writer,
+      fmt: self.fmt,
       clock,
     }
   }
+
   pub fn time_spans(mut self, enable: bool) -> Self {
     self.time_spans = enable;
     self
@@ -151,40 +210,50 @@ where
     self
   }
 
+  pub fn with_threads(mut self, names: bool, ids: bool) -> Self {
+    if cfg!(not(feature = "thread_id")) && ids {
+      warn!("Logging thread IDs requires the 'thread_id' feature which is currently disabled.");
+    }
+    self.thread_name = names;
+    self.thread_id = ids;
+    self
+  }
 
   pub fn source_location(mut self, include: bool) -> Self {
     self.source_location = include;
     self
   }
 
-  pub fn finish(self) -> JsonLayer<C, W> {
+  pub fn finish(self) -> SerdeLayer<F, C, W> {
     macro_rules! bit_is_set {
         ($x:expr, $bit:path) => {
           $x.clone() & $bit.clone() == $bit.clone()
         };
     }
 
-    JsonLayer {
+    SerdeLayer {
       record_span_create: bit_is_set!(self.span_events, FmtSpan::NEW),
       record_span_close: bit_is_set!(self.span_events, FmtSpan::CLOSE),
       record_span_enter: bit_is_set!(self.span_events, FmtSpan::ENTER),
       record_span_exit: bit_is_set!(self.span_events, FmtSpan::EXIT),
+      thread_id: self.thread_id,
+      thread_name: self.thread_name,
       source_location: self.source_location,
       time_spans: self.time_spans,
       writer: self.writer,
       clock: self.clock,
+      fmt: self.fmt,
     }
   }
 }
 
-impl<C, W> JsonLayer<C, W>
+impl<F, C, W> SerdeLayer<F, C, W>
   where
+    F: SerdeFormat,
     C: Clock,
-    W: for<'w> MakeWriter<'w>
+    W: WriteRecord,
 {
   fn emit_event<'a>(&self, meta: &Metadata<'a>, spans: Spans<'a>, e: EventKind<'a>) {
-    thread_local! {static BUFFER : RefCell<Vec<u8>> = RefCell::new(Vec::with_capacity(0x1000)) }
-    
     let thread = std::thread::current();
 
     let thread_name = thread.name()
@@ -195,6 +264,13 @@ impl<C, W> JsonLayer<C, W>
       if self.source_location { (meta.file(), meta.line()) }
       else { (None, None) };
 
+    #[cfg(feature = "thread_id")]
+    let thread_id = if self.thread_id { Some(thread.id().as_u64()) } else { None };
+    #[cfg(not(feature = "thread_id"))]
+    let thread_id = None;
+
+    let thread_name = if self.thread_name { Some(thread_name.as_ref()) } else { None };
+
     let event = Event {
       level: (*meta.level()).into(),
       kind: e,
@@ -202,37 +278,13 @@ impl<C, W> JsonLayer<C, W>
       target: meta.target(),
       src_file,
       src_line,
-      time: self.clock.get_time(),
-
-      thread_id: Some(thread.id().as_u64()),
-      thread_name: Some(thread_name.as_ref()),
+      time: self.clock.time(),
+      thread_id,
+      thread_name,
     };
 
 
-    let mut writer = self.writer.make_writer_for(meta);
-    BUFFER.with(|buf: &RefCell<_>| {
-      let mut buf = &mut *buf.borrow_mut();
-      serde_json::to_writer(&mut buf, &event).unwrap();
-      buf.push('\n' as u8);
-      writer.write_all(buf).unwrap();
-      buf.clear();
-    })
-    // writer.write("\n".as_bytes()).unwrap();
-
-    // #[cfg(debug_assertions)] {
-    //   serde_json::to_writer(&mut writer, &event).unwrap();
-    //   writer.write("\n".as_bytes()).unwrap();
-    // }
-    //
-    // #[cfg(not(debug_assertions))] {
-    //   if let Err(e) = serde_json::to_writer(&mut writer, &event) {
-    //     eprintln!("bug: error serializing event: {}", e);
-    //   } else {
-    //     if let Err(e) = writer.write("\n".as_bytes()) {
-    //       eprintln!("I/O error: {}", &e);
-    //     }
-    //   }
-    // }
+    self.writer.write(&self.fmt, &event);
   }
 }
 
@@ -250,10 +302,11 @@ where
 }
 
 
-impl<C, W, S> Layer<S> for JsonLayer<C, W>
+impl<F, C, W, S> Layer<S> for SerdeLayer<F, C, W>
     where
+    F: SerdeFormat + 'static,
     C: Clock + 'static,
-    W: for<'w> MakeWriter<'w> + 'static,
+    W: WriteRecord + 'static,
     S: Subscriber + for<'l> LookupSpan<'l>,
 {
   fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {

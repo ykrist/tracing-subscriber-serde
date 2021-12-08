@@ -1,5 +1,4 @@
-#![feature(thread_id_value)] // TODO: make this an opt-in feature, fallback to None
-#![feature(maybe_uninit_write_slice)] // TODO: make non-blocking an opt-in feature
+#![cfg_attr(feature = "thread_id", feature(thread_id_value))]
 
 use std::num::NonZeroU64;
 use serde::{Serialize, Deserialize};
@@ -7,8 +6,8 @@ use serde_repr::{Serialize_repr, Deserialize_repr};
 
 use std::fmt::{Debug};
 
-mod subscriber;
-pub use subscriber::JsonLayer;
+pub mod subscriber;
+pub use subscriber::SerdeLayer;
 pub use tracing_subscriber::fmt::format::FmtSpan;
 
 pub mod time;
@@ -19,7 +18,7 @@ use std::collections::HashMap;
 pub mod consumer;
 
 mod nonblocking;
-pub use nonblocking::nonblocking;
+pub use nonblocking::{nonblocking, WriteRecord, FlushGuard};
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]

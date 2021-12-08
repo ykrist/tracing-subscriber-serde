@@ -5,9 +5,10 @@ use std::path::{PathBuf, Path};
 use tracing_subscriber::fmt::{MakeWriter, writer::MutexGuardWriter};
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber_json_full::JsonLayer;
+use tracing_subscriber_json_full::{SerdeLayer, WriteRecord, subscriber::SerdeFormat, FlushGuard};
 use tracing::Subscriber;
 use tracing_appender::non_blocking::{WorkerGuard, NonBlockingBuilder};
+use serde::Serialize;
 
 pub struct InMemoryWriter {
   inner: Arc<Mutex<Vec<u8>>>,
@@ -42,6 +43,12 @@ impl<'a> MakeWriter<'a> for InMemoryWriter {
   }
 }
 
+impl WriteRecord for InMemoryWriter {
+  fn write(&self, fmt: impl SerdeFormat, record: impl Serialize) {
+    let buf = &mut *self.inner.lock().unwrap();
+    fmt.serialize(buf, record);
+  }
+}
 
 impl Drop for InMemoryWriterFlushGuard {
   fn drop(&mut self) {
@@ -49,7 +56,6 @@ impl Drop for InMemoryWriterFlushGuard {
     std::fs::write(&self.dest, buf.as_slice()).unwrap();
   }
 }
-
 
 
 pub fn setup_tsjson_nb() -> (impl Subscriber + Send + Sync + 'static, WorkerGuard) {
@@ -70,13 +76,12 @@ pub fn setup_tsjson_nb() -> (impl Subscriber + Send + Sync + 'static, WorkerGuar
 }
 
 
-pub fn setup_jsonfull_nb() -> (impl Subscriber + Send + Sync + 'static, WorkerGuard) {
-  let (writer, g) = NonBlockingBuilder::default()
-    .lossy(false)
+pub fn setup_jsonfull_nb() -> (impl Subscriber + Send + Sync + 'static, FlushGuard) {
+  let (writer, g) = tracing_subscriber_json_full::nonblocking()
     .finish(Vec::<u8>::with_capacity(WRITE_BUF_SIZE));
 
   let s = tracing_subscriber::registry()
-    .with(JsonLayer::new()
+    .with(SerdeLayer::new()
       .with_writer(writer)
       .with_clock(tracing_subscriber_json_full::time::SystemClock::default())
       .source_location(false)
@@ -106,7 +111,7 @@ pub fn setup_jsonfull(filepath: Option<impl AsRef<Path>>) -> (impl Subscriber + 
   let (writer, g) = InMemoryWriter::new(filepath);
 
   let s = tracing_subscriber::registry()
-    .with(JsonLayer::new()
+    .with(SerdeLayer::new()
       .with_writer(writer)
       .with_clock(tracing_subscriber_json_full::time::SystemClock::default())
       .source_location(false)

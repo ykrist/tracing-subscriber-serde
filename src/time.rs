@@ -1,6 +1,7 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH, Instant};
 use serde::{Deserialize, Serialize};
 
+// TODO: make this private and add getters to SpanTime
 /// time * TIME_SCALE = number of seconds
 pub const TIME_SCALE : u64 = 1000_000_000;
 
@@ -9,6 +10,8 @@ pub struct SpanTime {
   busy: u64,
   idle: u64
 }
+
+
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct SpanTimer {
@@ -59,7 +62,7 @@ impl UnixTime {
 }
 
 pub trait Clock {
-  fn get_time(&self) -> Option<UnixTime>;
+  fn time(&self) -> Option<UnixTime>;
 }
 
 #[derive(Copy, Clone, Default)]
@@ -69,7 +72,7 @@ pub struct SystemClock {
 
 
 impl Clock for SystemClock {
-  fn get_time(&self) -> Option<UnixTime> {
+  fn time(&self) -> Option<UnixTime> {
     SystemTime::now()
       .duration_since(UNIX_EPOCH)
       .ok()
@@ -78,7 +81,7 @@ impl Clock for SystemClock {
 }
 
 impl Clock for () {
-  fn get_time(&self) -> Option<UnixTime> {
+  fn time(&self) -> Option<UnixTime> {
     None
   }
 }

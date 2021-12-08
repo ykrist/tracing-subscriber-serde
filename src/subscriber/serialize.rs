@@ -41,6 +41,8 @@ pub struct Event<'a, 'b> {
   #[serde(rename="s")]
   pub spans: Spans<'a>,
 
+  // TODO span ID
+
   #[serde(rename="t")]
   pub target: &'a str,
 
