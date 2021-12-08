@@ -47,10 +47,35 @@ impl From<tracing::Level> for Level {
 #[serde(untagged)]
 pub enum FieldValue {
   Bool(bool),
-  Float(f64),
   Int(i64),
+  Float(f64),
   Str(String)
 }
+
+macro_rules! impl_field_value_from {
+  ($($t:ty => $variant:ident),+ $(,)?) => {
+    $(
+      impl From<$t> for FieldValue {
+        fn from(v: $t) -> FieldValue {
+          FieldValue::$variant(v.into())
+        }
+      }
+    )*
+  };
+}
+
+impl_field_value_from! {
+  bool => Bool,
+  i64 => Int,
+  i32 => Int,
+  i16 => Int,
+  i8 => Int,
+  f32 => Float,
+  f64 => Float,
+  String => Str,
+  &str => Str,
+}
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all="snake_case")]

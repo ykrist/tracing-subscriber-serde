@@ -41,7 +41,7 @@ impl SpanTimer {
   }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct UnixTime {
   #[serde(rename="s")]
   pub seconds: u64,

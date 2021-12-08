@@ -93,6 +93,7 @@ impl<'a> Spans<'a> {
       None => return Self::default(),
     };
 
+
     for s in spans {
       spanlist.append_child(s.extensions().get::<Spans>().expect(PANIC_MSG_SPANS_MISSING));
     }
@@ -192,4 +193,90 @@ impl Serialize for Spans<'_> {
   }
 }
 
+#[cfg(test)]
+mod tests {
+  use super::*;
 
+  fn float_eq(a: f64, b: f64) -> bool {
+    // Safety: f64 and u64 have the same size and alignment, and every 64-bit-pattern is
+    // valid for u64.
+    unsafe {
+      let a : u64 = std::mem::transmute(a);
+      let b : u64 = std::mem::transmute(b);
+      a == b
+    }
+  }
+
+  fn eq_field_values(a: &crate::FieldValue, b: &FieldValue) -> bool {
+    use crate::FieldValue::*;
+
+    match (a, b) {
+      (Int(a), FieldValue::Int(b)) => a == b,
+      (Bool(a), FieldValue::Bool(b)) => a == b,
+      (Float(a), FieldValue::Float(b)) => float_eq(*a, *b),
+      (Str(a), FieldValue::Str(b)) => a == b,
+      _ => false,
+    }
+  }
+
+  macro_rules! assert_field_values_eq {
+      ($left:expr, $right:expr) => {
+        let left = &$left;
+        let right = &$right;
+        if !eq_field_values(left, right) {
+          panic!("assert eq failed: {:?} != {:?}", left, right)
+        }
+      };
+  }
+
+  // TODO should probably fuzz this
+  #[test]
+  fn serde_borrowed_to_owned() {
+    let e = Event {
+      kind: EventKind::Event(smallvec::smallvec![
+        ("message", FieldValue::Str("oh no!".into())),
+        ("x", FieldValue::Int(42)),
+      ]),
+      level: Level::Trace,
+      spans: Spans(vec![
+        SpanItem::Name("hello_world"),
+        SpanItem::Field{ name: "field", val: FieldValue::Bool(false) },
+      ]),
+      target: "foo",
+      thread_id: NonZeroU64::new(1),
+      thread_name: Some("WorkerThread"),
+      src_line: Some(20),
+      src_file: Some("src/module/file.rs"),
+      time: Some(UnixTime{ seconds: 10, nanos: 11 })
+    };
+
+
+    let serialized = serde_json::to_string_pretty(&e).unwrap();
+    println!("{}", serialized);
+
+    let de : crate::Event = serde_json::from_str(&serialized).unwrap();
+
+    assert!(matches!(&de.kind, crate::EventKind::Event(_)));
+    match &de.kind {
+      crate::EventKind::Event(fields) => {
+        assert_eq!(fields.len(), 2);
+        assert_field_values_eq!(fields["message"], FieldValue::Str("oh no!".into()));
+        assert_field_values_eq!(fields["x"], FieldValue::Int(42));
+      },
+      other => panic!("wrong event kind: {:?}", other)
+    }
+
+    assert_eq!(de.level, crate::Level::Trace);
+    assert_eq!(de.spans.len(), 1);
+    let span = &de.spans[0];
+    assert_eq!(&span.name, "hello_world");
+    assert_eq!(span.fields.len(), 1);
+    assert_field_values_eq!(span.fields["field"], FieldValue::Bool(false));
+
+    assert_eq!(de.target, "foo");
+    assert_eq!(de.thread_id, NonZeroU64::new(1));
+    assert_eq!(de.thread_name, Some("WorkerThread".to_string()));
+    assert_eq!(de.src_file, Some("src/module/file.rs".to_string()));
+    assert_eq!(de.time, Some(UnixTime{ seconds: 10, nanos: 11}));
+  }
+}
