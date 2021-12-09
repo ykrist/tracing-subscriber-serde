@@ -1,24 +1,42 @@
+//! Writing serialized events out.
+//!
+//! This module contains the [`WriteEvent`] trait which is what you must implement
+//! to write serialized events out to a file, socket, terminal or other `Writer`.
 use serde::Serialize;
 use std::io::{Stdout, Stderr, Write, self};
-use std::sync::Mutex;
-use crate::subscriber::SerdeFormat;
+use std::sync::{Arc, Mutex};
+use crate::SerdeFormat;
 
 mod nonblocking;
 
-pub use nonblocking::{FlushGuard, NonBlocking, Builder};
+pub use nonblocking::{FlushGuard, NonBlocking, NonBlockingBuilder};
 
 /// Serializes the tracing event by constructing a [Writer](std::io::Write)
-/// and calling [`SerdeFormat::serialize`] on `fmt` with the Writer and `event.
+/// and calling [`SerdeFormat::serialize`] on `fmt` with the Writer and `event`.
 ///
 /// Note that this takes a `&self`, not a `&mut self`, as [`WriteEvent::write`] may
 /// be called concurrently from multiple threads.  This means implementors need to implement
 /// some kind of synchronisation mechanisism (such as a [`Mutex`](std::sync::Mutex)) to produce a mutable
 /// `Write` instance that can be passed to
 ///
-/// It is automatically implemented for `Mutex<W>` where `W: Write` so you can give a
-/// `Mutex::new(writer)` to [`SerdeLayerBuilder::with_writer`](crate::subscriber::SerdeLayerBuilder::with_writer).
+/// It is automatically implemented for `Arc<Mutex<W>>` where `W: Write` so you can give a
+/// `Arc::new(Mutex::new(writer))` to [`SerdeLayerBuilder::with_writer`](crate::subscriber::SerdeLayerBuilder::with_writer).
 pub trait WriteEvent {
-  /// Serializes the tracing event using the supplied`fmt`.
+  /// On encountering an IO error, print a warning.
+  ///
+  /// Default is to ignore IO errors silently.
+  fn warn_on_error(self) -> WarnOnError<Self> where Self: Sized {
+    WarnOnError::new(self)
+  }
+
+  /// On encountering an IO error, panic.
+  ///
+  /// Default is to ignore IO errors silently.
+  fn panic_on_error(self) -> PanicOnError<Self> where Self: Sized {
+    PanicOnError::new(self)
+  }
+
+  /// Serializes the tracing event using the supplied `fmt`.
   fn write(&self, fmt: impl SerdeFormat, event: impl Serialize) -> io::Result<()>;
 }
 
@@ -28,8 +46,14 @@ impl<'a, T: WriteEvent> WriteEvent for &'a T {
   }
 }
 
+impl<T: WriteEvent> WriteEvent for Arc<T> {
+  fn write(&self, fmt: impl SerdeFormat, event: impl Serialize) -> io::Result<()> {
+    T::write(&*self, fmt, event)
+  }
+}
 
-macro_rules! impl_writerecord_for_stdpipe {
+
+macro_rules! impl_writeevent_for_stdpipe {
   ($t:path) => {
     impl WriteEvent for $t {
       fn write(&self, fmt: impl SerdeFormat, event: impl Serialize) -> io::Result<()> {
@@ -39,8 +63,8 @@ macro_rules! impl_writerecord_for_stdpipe {
   };
 }
 
-impl_writerecord_for_stdpipe!(Stdout);
-impl_writerecord_for_stdpipe!(Stderr);
+impl_writeevent_for_stdpipe!(Stdout);
+impl_writeevent_for_stdpipe!(Stderr);
 
 impl<W: Write> WriteEvent for Mutex<W> {
   fn write(&self, fmt: impl SerdeFormat, event: impl Serialize) -> io::Result<()> {
@@ -77,7 +101,7 @@ impl<T: WriteEvent> WriteEvent for PanicOnError<T> {
   }
 }
 
-/// A wrapper type for panicking when the inner `WriteEvent`
+/// A wrapper type for printing a warning when the inner `WriteEvent`
 /// returns an error.
 ///
 /// The default behaviour of [`SerdeLayer`](crate::SerdeLayer) is to silently ignore any

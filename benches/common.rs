@@ -5,7 +5,7 @@ use std::path::{PathBuf, Path};
 use tracing_subscriber::fmt::{MakeWriter, writer::MutexGuardWriter};
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber_json_full::{SerdeLayer, WriteEvent, subscriber::SerdeFormat, writer::{FlushGuard, NonBlocking}};
+use tracing_subscriber_serde::{SerdeLayer, WriteEvent, SerdeFormat, writer::{FlushGuard, NonBlocking}, time::SystemClock};
 use tracing::Subscriber;
 use tracing_appender::non_blocking::{WorkerGuard, NonBlockingBuilder};
 use serde::Serialize;
@@ -84,8 +84,8 @@ pub fn setup_jsonfull_nb() -> (impl Subscriber + Send + Sync + 'static, FlushGua
   let s = tracing_subscriber::registry()
     .with(SerdeLayer::new()
       .with_writer(writer)
-      .with_clock(tracing_subscriber_json_full::time::SystemClock::default())
-      .source_location(false)
+      .with_clock(SystemClock::default())
+      .with_source_location(false)
       .with_span_events(FmtSpan::FULL)
       .finish()
     );
@@ -114,8 +114,8 @@ pub fn setup_jsonfull(filepath: Option<impl AsRef<Path>>) -> (impl Subscriber + 
   let s = tracing_subscriber::registry()
     .with(SerdeLayer::new()
       .with_writer(writer)
-      .with_clock(tracing_subscriber_json_full::time::SystemClock::default())
-      .source_location(false)
+      .with_clock(SystemClock::default())
+      .with_source_location(false)
       .with_span_events(FmtSpan::FULL)
       .finish()
     );

@@ -12,14 +12,12 @@ use smallvec::SmallVec;
 use smartstring::alias::String as SString;
 
 use crate::time::{UnixTime, Clock, SpanTime, SpanTimer};
-use crate::{SpanEvents, WriteEvent};
+use crate::{SpanEvents, WriteEvent, SerdeFormat};
+use crate::format::Json;
 
 mod serialize;
-mod format;
 
 use serialize::*;
-pub use format::*;
-
 
 trait AddFields {
   fn add_field(&mut self, name: &'static str, val: FieldValue);
@@ -83,7 +81,7 @@ impl<T: AddFields> Visit for FieldVisitor<T> {
   }
 }
 
-
+/// Configuration for [`SerdeLayer`]
 pub struct SerdeLayerBuilder<F, C, W> {
   source_location: bool,
   span_events: SpanEvents,
@@ -101,7 +99,7 @@ pub struct SerdeLayerBuilder<F, C, W> {
 /// The events can be later deserialized using serde with the provided [`Event`](crate::Event) type.
 ///
 /// The layer is parameterised by three types:
-/// - `F` : the [`SerdeFormat`] you want to use, the default is [`JsonFormat`].
+/// - `F` : the [`SerdeFormat`] you want to use, the default is [`Json`].
 /// - `C` : the [`Clock`] used to optionally produce timestamps.  The default is `()`, which is no clock.
 /// - `W` : the [`WriteEvent`] writer used for output.
 ///
@@ -124,18 +122,18 @@ pub struct SerdeLayer<F, C, W> {
 
 
 
-impl SerdeLayer<JsonFormat, (), Stdout> {
+impl SerdeLayer<Json, (), Stdout> {
   /// Start building a new layer.
-  pub fn new() -> SerdeLayerBuilder<JsonFormat, (), Stdout> {
+  pub fn new() -> SerdeLayerBuilder<Json, (), Stdout> {
     SerdeLayerBuilder {
       thread_name: false,
       thread_id: false,
       writer: std::io::stdout(),
       clock: (),
-      fmt: JsonFormat,
+      fmt: Json,
       source_location: true,
-      time_spans: true,
-      span_events: FmtSpan::NONE
+      time_spans: false,
+      span_events: SpanEvents::NONE
     }
   }
 }
@@ -185,8 +183,12 @@ where
     }
   }
 
+  /// Time spans' busy and idle time using [`std::time::Instant`].
   ///
-  pub fn time_spans(mut self, enable: bool) -> Self {
+  /// Enabling this will always enable [`SpanEvents::CLOSE`]. Disabled by default.
+  ///
+  /// This will be stored in [`EventKind::SpanClose`](crate::EventKind::SpanClose) in the `kind` field of [`Event`](crate::Event).
+  pub fn with_time_spans(mut self, enable: bool) -> Self {
     self.time_spans = enable;
     self
   }
@@ -198,20 +200,21 @@ where
     self
   }
 
-  pub fn with_threads(mut self, names: bool, ids: bool) -> Self {
-    if cfg!(not(feature = "thread_id")) && ids {
-      eprintln!("Logging thread IDs requires the 'thread_id' feature which is currently disabled.");
-    }
+  /// Record thread information (names and thread IDs).  Logging thread IDs requires the `thread_id`
+  /// feature which is only available on the Nightly compiler.
+  pub fn with_thread_info(mut self, names: bool, ids: bool) -> Self {
     self.thread_name = names;
     self.thread_id = ids;
     self
   }
 
-  pub fn source_location(mut self, include: bool) -> Self {
+  /// Record the line number and source file of the event .
+  pub fn with_source_location(mut self, include: bool) -> Self {
     self.source_location = include;
     self
   }
 
+  /// Finish configuration.
   pub fn finish(self) -> SerdeLayer<F, C, W> {
     macro_rules! bit_is_set {
         ($x:expr, $bit:path) => {
@@ -220,10 +223,10 @@ where
     }
 
     SerdeLayer {
-      record_span_create: bit_is_set!(self.span_events, FmtSpan::NEW),
-      record_span_close: bit_is_set!(self.span_events, FmtSpan::CLOSE),
-      record_span_enter: bit_is_set!(self.span_events, FmtSpan::ENTER),
-      record_span_exit: bit_is_set!(self.span_events, FmtSpan::EXIT),
+      record_span_create: bit_is_set!(self.span_events, SpanEvents::NEW),
+      record_span_close: bit_is_set!(self.span_events, SpanEvents::CLOSE) || self.time_spans,
+      record_span_enter: bit_is_set!(self.span_events, SpanEvents::ENTER),
+      record_span_exit: bit_is_set!(self.span_events, SpanEvents::EXIT),
       thread_id: self.thread_id,
       thread_name: self.thread_name,
       source_location: self.source_location,

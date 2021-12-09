@@ -27,6 +27,11 @@ anyhow = "1.0.51"
 criterion = "0.3.5"
 tracing-appender = "0.2.0"
 
+[[example]]
+name = "main"
+
+[[example]]
+name = "pprint"
 
 [[bench]]
 name = "comparison"

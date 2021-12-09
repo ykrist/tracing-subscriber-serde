@@ -5,21 +5,21 @@ use std::thread::JoinHandle;
 
 use serde::Serialize;
 
-use crate::subscriber::SerdeFormat;
+use crate::SerdeFormat;
 use super::WriteEvent;
 
 pub const DEFAULT_BUFFERED_RECORDS_LIMIT: usize = 128_000;
 
-
+/// Constructs a [`NonBlocking`].
 #[derive(Clone, Debug)]
-pub struct Builder {
+pub struct NonBlockingBuilder {
   lossy: bool,
   max_buffered_records: usize,
 }
 
-impl Default for Builder {
+impl Default for NonBlockingBuilder {
   fn default() -> Self {
-    Builder {
+    NonBlockingBuilder {
       lossy: false,
       max_buffered_records: DEFAULT_BUFFERED_RECORDS_LIMIT,
     }
@@ -29,17 +29,22 @@ impl Default for Builder {
 const PANIC_MSG_DEAD_WRITER : &'static str = "writer thread has died";
 
 
-impl Builder {
+impl NonBlockingBuilder {
+  /// Sets the maximum number of events buffered. See [`NonBlockingBuilder::lossy`] on behaviour
+  /// when the buffer is full.
   pub fn buf_size(mut self, sz: usize) -> Self {
     self.max_buffered_records = sz;
     self
   }
 
+  /// If the buffer is full, events will be dropped if `lossy = true`,
+  /// otherwise the `NonBlocking` will block until the buffer has space.
   pub fn lossy(mut self, lossy: bool) -> Self {
     self.lossy = lossy;
     self
   }
 
+  /// Finish configuration.
   pub fn finish<W: Write + Send + 'static>(self, writer: W) -> (NonBlocking, FlushGuard) {
     let guard = WriterThread::spawn(writer, self.max_buffered_records);
 
@@ -59,6 +64,11 @@ enum Message {
   Shutdown,
 }
 
+/// A "non-blocking" writer which spawns a dedicated I/O thread and feeds
+/// it serialized events using message passing.
+///
+/// Non-blocking is in quotes because it is only non-blocking if `lossy` is set to `false`
+/// with [`NonBlockingBuilder::lossy`].
 #[derive(Clone, Debug)]
 pub struct NonBlocking {
   sender: Sender<Message>,
@@ -66,6 +76,8 @@ pub struct NonBlocking {
   message_buf_initial_capacity: usize,
 }
 
+/// The writer thread of [`NonBlocking`] will shutdown when this RAII guard is dropped,
+/// flushing any buffered events.
 #[derive(Debug)]
 pub struct FlushGuard {
   handle: Option<JoinHandle<()>>,
@@ -80,7 +92,7 @@ impl Drop for FlushGuard {
 }
 
 impl NonBlocking {
-  pub fn new() -> Builder { Builder::default() }
+  pub fn new() -> NonBlockingBuilder { NonBlockingBuilder::default() }
 }
 
 impl WriteEvent for NonBlocking {
@@ -169,7 +181,7 @@ mod tests {
   use std::time::Duration;
   use std::sync::{Mutex, Arc};
 
-  use crate::subscriber::JsonFormat;
+  use crate::format::Json;
 
   type Buffer = Arc<Mutex<Vec<u8>>>;
 
@@ -243,7 +255,7 @@ mod tests {
 
     for message in 0..5 {
       // First two messages will get buffered, others will be dropped.
-      writer.write(JsonFormat, message).unwrap();
+      writer.write(Json, message).unwrap();
     }
 
     drop(g);
@@ -266,14 +278,14 @@ mod tests {
 
     for message in 0..10 {
       // First two messages will get buffered, others will be dropped.
-      writer.write(JsonFormat, message).unwrap();
+      writer.write(Json, message).unwrap();
     }
 
     for _ in 0..num_buffered {
       writer_continue.send();
     }
 
-    writer.write(JsonFormat, "hello world").unwrap();
+    writer.write(Json, "hello world").unwrap();
     writer_continue.send();
 
     drop(g);

@@ -1,14 +1,15 @@
-use std::fmt;
 use ansi_term::Colour;
 use crate::{Event, Level, FieldValue, EventKind};
-use std::fmt::Formatter;
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
+/// Configuration of pretty formatting for events.
 #[derive(Debug, Copy, Clone)]
 pub struct PrettyPrinter {
   show_source: bool,
   target: bool,
 }
 
+/// A formatted event which implements [`Display`].
 #[derive(Debug, Copy, Clone)]
 pub struct FmtEvent<'a> {
   printer: &'a PrettyPrinter,
@@ -29,15 +30,16 @@ impl PrettyPrinter {
     self.show_source = on;
     self
   }
-  pub fn target(mut self, on: bool) -> Self {
+
+  pub fn show_target(mut self, on: bool) -> Self {
     self.target = on;
     self
   }
 }
 
 
-impl fmt::Display for FmtEvent<'_> {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl Display for FmtEvent<'_> {
+  fn fmt(&self, f: &mut Formatter) -> FmtResult {
     const CONT : &'static str = "  | ";
     let lvl = match self.event.level {
       Level::Trace => Colour::Purple.bold().paint("TRACE"),
@@ -116,7 +118,7 @@ impl PrettyPrinter {
     println!("{}", self.fmt(event));
   }
 
-  fn fmt_fieldvalue(&self, f: &mut Formatter, v: &FieldValue) -> fmt::Result {
+  fn fmt_fieldvalue(&self, f: &mut Formatter, v: &FieldValue) -> FmtResult {
     match v {
       FieldValue::Int(n) => f.write_fmt(format_args!("{}", Colour::Purple.paint(format!("{}", n))))?,
       FieldValue::Float(v) => f.write_fmt(format_args!("{}", Colour::Purple.paint(format!("{}", v))))?,
@@ -126,12 +128,12 @@ impl PrettyPrinter {
     Ok(())
   }
 
-  fn fmt_field(&self, f: &mut fmt::Formatter, field: (&str, &FieldValue)) -> fmt::Result {
+  fn fmt_field(&self, f: &mut Formatter, field: (&str, &FieldValue)) -> FmtResult {
     f.write_fmt(format_args!("{}= ", Colour::Blue.paint(field.0)))?;
     self.fmt_fieldvalue(f, field.1)
   }
 
-  fn fmt_fields<'a, S, I>(&'a self, f: &mut Formatter, fields: I) -> fmt::Result
+  fn fmt_fields<'a, S, I>(&'a self, f: &mut Formatter, fields: I) -> FmtResult
     where
       S: AsRef<str> + 'a,
       I: IntoIterator<Item=(&'a S, &'a FieldValue)> + 'a
@@ -152,14 +154,13 @@ impl PrettyPrinter {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use super::super::iter_logfile;
-
+  use crate::consumer::iter_json_file;
 
 
   #[test]
   fn pretty_printing() -> anyhow::Result<()> {
     let p = PrettyPrinter::default();
-    for event in iter_logfile(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test.json")) {
+    for event in iter_json_file(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test.json")) {
       p.print(&event?);
     }
     Ok(())

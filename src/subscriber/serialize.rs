@@ -13,6 +13,8 @@ pub enum FieldValue {
   Str(SString)
 }
 
+
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all="snake_case")]
 pub enum EventKind<'a> {

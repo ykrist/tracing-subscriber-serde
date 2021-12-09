@@ -1,3 +1,4 @@
+//! Serde formats and supporting trait.
 use std::io::Write;
 use serde::Serialize;
 
@@ -9,9 +10,9 @@ use serde::Serialize;
 /// The implementation of
 ///
 /// # Examples
-/// Below is the implementation for [`JsonFormat`].
+/// Below is the implementation for [`Json`].
 /// ```ignore
-/// impl SerdeFormat for JsonFormat {
+/// impl SerdeFormat for Json {
 ///   fn message_size_hint(&self) -> usize { 512 }
 ///
 ///   fn serialize(&self, mut buf: impl Write, event: impl Serialize) -> std::io::Result<()> {
@@ -42,9 +43,9 @@ impl<'a, T: SerdeFormat> SerdeFormat for &'a T {
 
 #[derive(Copy, Clone, Debug)]
 /// Serialize each event using a compact JSON format, separated by newlines.
-pub struct JsonFormat;
+pub struct Json;
 
-impl SerdeFormat for JsonFormat {
+impl SerdeFormat for Json {
   fn message_size_hint(&self) -> usize { 512 }
 
   fn serialize(&self, mut buf: impl Write, event: impl Serialize) -> std::io::Result<()> {
