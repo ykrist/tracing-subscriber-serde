@@ -205,6 +205,12 @@ mod tests {
 
   impl Write for TestWriter {
     fn write(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
+      if let Ok(s) = std::str::from_utf8(buf) {
+        eprintln!("TestWriter: write {:?}", s)
+      } else {
+        eprintln!("TestWriter: write {:?}", buf)
+      }
+
       if let Some(signal) = self.wait.as_ref() {
         eprintln!("TestWriter: waiting for signal");
         signal.recv_timeout(Duration::from_secs(5)).expect("writer stalled");
@@ -277,12 +283,19 @@ mod tests {
       .buf_size(num_buffered)
       .finish(writer);
 
+
+    // num_buffered  in the channel, + 1 in writer.
+    writer.write(Json, "first").unwrap();
+    std::thread::sleep(Duration::from_millis(500)); // Give the write time to wait.
+
     for message in 0..10 {
-      // First two messages will get buffered, others will be dropped.
+      // First num_buffered messages will get buffered, others will be dropped.
+      eprintln!("send {}", message);
       writer.write(Json, message).unwrap();
     }
 
-    for _ in 0..num_buffered {
+    for _ in 0..(num_buffered + 1) {
+      eprintln!("signalling writer...");
       writer_continue.send();
     }
 
@@ -292,6 +305,6 @@ mod tests {
     drop(g);
 
     let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
-    assert_eq!(output, "0\n1\n\"hello world\"\n");
+    assert_eq!(output, "\"first\"\n0\n1\n\"hello world\"\n");
   }
 }
