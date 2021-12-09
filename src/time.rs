@@ -54,14 +54,16 @@ impl SpanTimer {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Ord, PartialOrd, Hash)]
-/// The UNIX epoch time, number of seconds + nanos since 00:00UTC 1 Jan, 1970.
+/// The UNIX epoch time, number of seconds + nanos since 00:00 1 Jan, 1970 (UTC).
 ///
 /// This type almost identical to [`Duration`], but uses shorter field names for serialisation
 /// to self-describing formats such as JSON.  It can be converted to and from [`Duration`]
 /// and converted to [`SystemTime`].
 pub struct UnixTime {
+  /// Number of seconds since 00:00 1 Jan, 1970 (UTC)
   #[serde(rename="s")]
   pub seconds: u64,
+  /// Number of nanoseconds (seconds + nanoseconds = epoch time)
   #[serde(rename="n")]
   pub nanos: u32,
 }

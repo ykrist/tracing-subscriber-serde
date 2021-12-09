@@ -5,8 +5,10 @@ use std::num::NonZeroU64;
 use serde::{Serialize, Deserialize};
 use serde_repr::{Serialize_repr, Deserialize_repr};
 
+/// The logging level of the event or span
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
+#[allow(missing_docs)]
 pub enum Level {
   Trace = 0,
   Debug = 1,
@@ -37,6 +39,7 @@ impl From<tracing::Level> for Level {
 /// convenient for finding `NaN`s in logs (usually `NaN == NaN` is `false` despite the bit-patterns being identical).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(untagged)]
+#[allow(missing_docs)]
 pub enum FieldValue {
   Bool(bool),
   Int(i64),
@@ -134,6 +137,8 @@ pub struct Span {
   #[serde(alias = "n")]
   pub name: String,
 
+
+  /// The [span ID](mod@tracing::span), if one was recorded
   #[serde(alias = "i")]
   #[serde(default)]
   #[serde(skip_serializing_if = "Option::is_none")]
@@ -142,7 +147,6 @@ pub struct Span {
   /// The fields of the span
   #[serde(alias = "f")]
   pub fields: HashMap<String, FieldValue>,
-
 }
 
 /// A serialized tracing event.

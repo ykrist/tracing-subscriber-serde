@@ -92,6 +92,7 @@ impl Drop for FlushGuard {
 }
 
 impl NonBlocking {
+  /// Start configuring a new [`NonBlocking`] writer
   pub fn new() -> NonBlockingBuilder { NonBlockingBuilder::default() }
 }
 

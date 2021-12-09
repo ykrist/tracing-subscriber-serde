@@ -103,8 +103,9 @@ impl<'a> Spans<'a> {
     spanlist
   }
 
-  pub fn new_span(&mut self, name: &'a str, span_id: Option<NonZeroU64>) {
-    self.0.push(SpanItem::Start { span_name: name, id: span_id });
+  pub fn new_span(&mut self, span_meta: &Metadata, span_id: Option<NonZeroU64>) {
+    self.0.reserve(span_meta.fields().len() + 1);
+    self.0.push(SpanItem::Start { span_name: span_meta.name(), id: span_id });
   }
 
 

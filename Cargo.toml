@@ -5,10 +5,15 @@ edition = "2018"
 autoexamples=false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-
+# docs.rs-specific configuration
+[package.metadata.docs.rs]
+# document all features
+all-features = true
+# defines the configuration attribute `docsrs`
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-ansi_term = "0.12.1"
+ansi_term = { version = "^0.12", optional = true }
 flume = "0.10.9"
 serde = { version = "^1.0", features = ['derive'] }
 serde_json = "^1.0"
@@ -20,7 +25,7 @@ tracing-subscriber = { version = "^0.3", features = ["json", "env-filter"] }
 
 [features]
 thread_id = []
-
+consumer = ["ansi_term"]
 
 [dev-dependencies]
 anyhow = "1.0.51"
@@ -32,6 +37,7 @@ name = "main"
 
 [[example]]
 name = "pprint"
+required-features = ["consumer"]
 
 [[bench]]
 name = "serialization"

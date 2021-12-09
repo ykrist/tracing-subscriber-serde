@@ -91,6 +91,7 @@ pub struct SerdeLayerBuilder<F, C, W> {
   clock: C,
   thread_name: bool,
   thread_id: bool,
+  span_ids: bool,
 }
 
 /// A tracing-subscriber [`Layer`](tracing_subscriber::Layer) which serializes events to any
@@ -134,7 +135,8 @@ impl SerdeLayer<Json, (), Stdout> {
       fmt: Json,
       source_location: true,
       time_spans: false,
-      span_events: SpanEvents::NONE
+      span_events: SpanEvents::NONE,
+      span_ids: false,
     }
   }
 }
@@ -161,6 +163,7 @@ where
       source_location: self.source_location,
       span_events: self.span_events,
       time_spans: self.time_spans,
+      span_ids: self.span_ids,
       writer,
       fmt: self.fmt,
       clock: self.clock,
@@ -178,6 +181,7 @@ where
       source_location: self.source_location,
       span_events: self.span_events,
       time_spans: self.time_spans,
+      span_ids: self.span_ids,
       writer: self.writer,
       fmt: self.fmt,
       clock,
@@ -198,6 +202,12 @@ where
   /// are constructed/entered and destroyed/exited.
   pub fn with_span_events(mut self, e: SpanEvents) -> Self {
     self.span_events = e;
+    self
+  }
+
+  /// Record [span IDs](mod@tracing::span)
+  pub fn with_span_ids(mut self, include: bool) -> Self {
+    self.span_ids = include;
     self
   }
 
@@ -224,7 +234,7 @@ where
     }
 
     SerdeLayer {
-      span_ids: true,
+      span_ids: self.span_ids,
       record_span_create: bit_is_set!(self.span_events, SpanEvents::NEW),
       record_span_close: bit_is_set!(self.span_events, SpanEvents::CLOSE) || self.time_spans,
       record_span_enter: bit_is_set!(self.span_events, SpanEvents::ENTER),
@@ -317,7 +327,7 @@ impl<F, C, W, S> Layer<S> for SerdeLayer<F, C, W>
     if extensions.get_mut::<Spans>().is_none() {
       let mut span = Spans::default();
       let id = if self.span_ids { Some(id.into_non_zero_u64()) } else { None };
-      span.new_span(meta.name(), id);
+      span.new_span(meta, id);
       let mut visitor = FieldVisitor(span);
       attrs.record(&mut visitor);
       let span = visitor.finish();

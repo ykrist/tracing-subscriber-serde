@@ -17,6 +17,7 @@ fn main() -> anyhow::Result<()> {
       .with_source_location(true)
       .with_span_events(SpanEvents::FULL)
       .with_thread_info(true, true)
+      .with_span_ids(true)
       .with_writer(Arc::clone(&buffer))
       .finish())
     .init();

@@ -78,26 +78,32 @@ impl Default for PrettyPrinter {
 }
 
 impl PrettyPrinter {
+  /// Limit the number of spans per event printed.  The innermost spans will
+  /// be display first.
   pub fn limit_spans(mut self, limit: usize) -> Self {
     self.limit_spans = limit;
     self
   }
 
+  /// Show source file information
   pub fn show_source(mut self, on: bool) -> Self {
     self.source = on;
     self
   }
 
+  /// Show span IDs as ID-strings
   pub fn show_span_ids(mut self, on: bool) -> Self {
     self.span_ids = on;
     self
   }
 
+  /// Show target of the event
   pub fn show_target(mut self, on: bool) -> Self {
     self.target = on;
     self
   }
 
+  /// Show span times for [`EventKind::SpanClose`] events.
   pub fn show_span_times(mut self, on: bool) -> Self {
     self.span_times = on;
     self
@@ -212,10 +218,12 @@ impl Display for FmtSpan<'_> {
 }
 
 impl PrettyPrinter {
+  /// Format an event for pretty-printing
   pub fn fmt<'a>(&'a self, event: &'a Event) -> FmtEvent<'a> {
     FmtEvent { printer: self, event }
   }
 
+  /// Convenience method for `println!("{}", printer.fmt(event))`
   pub fn print(&self, event: &Event) {
     println!("{}", self.fmt(event));
   }
