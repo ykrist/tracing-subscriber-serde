@@ -133,9 +133,16 @@ pub struct Span {
   /// The span's name
   #[serde(alias = "n")]
   pub name: String,
+
+  #[serde(alias = "i")]
+  #[serde(default)]
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub id: Option<NonZeroU64>,
+
   /// The fields of the span
   #[serde(alias = "f")]
   pub fields: HashMap<String, FieldValue>,
+
 }
 
 /// A serialized tracing event.

@@ -27,6 +27,7 @@ fn main() -> anyhow::Result<()> {
 
   let printer = PrettyPrinter::default()
     .show_target(false)
+    .show_span_ids(true)
     .limit_spans(10); // show at most N spans per event
 
 

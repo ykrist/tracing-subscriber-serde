@@ -113,6 +113,7 @@ pub struct SerdeLayer<F, C, W> {
   record_span_exit: bool,
   record_span_create: bool,
   record_span_close: bool,
+  span_ids: bool,
   time_spans: bool,
   fmt: F,
   writer: W,
@@ -223,6 +224,7 @@ where
     }
 
     SerdeLayer {
+      span_ids: true,
       record_span_create: bit_is_set!(self.span_events, SpanEvents::NEW),
       record_span_close: bit_is_set!(self.span_events, SpanEvents::CLOSE) || self.time_spans,
       record_span_enter: bit_is_set!(self.span_events, SpanEvents::ENTER),
@@ -261,6 +263,7 @@ impl<F, C, W> SerdeLayer<F, C, W>
     let thread_id = None;
 
     let thread_name = if self.thread_name { Some(thread_name.as_ref()) } else { None };
+
 
     let event = Event {
       level: (*meta.level()).into(),
@@ -313,7 +316,8 @@ impl<F, C, W, S> Layer<S> for SerdeLayer<F, C, W>
 
     if extensions.get_mut::<Spans>().is_none() {
       let mut span = Spans::default();
-      span.new_span(meta.name());
+      let id = if self.span_ids { Some(id.into_non_zero_u64()) } else { None };
+      span.new_span(meta.name(), id);
       let mut visitor = FieldVisitor(span);
       attrs.record(&mut visitor);
       let span = visitor.finish();

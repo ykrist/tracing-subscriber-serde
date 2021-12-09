@@ -8,8 +8,8 @@ use criterion::{Criterion, BenchmarkId, criterion_group, criterion_main};
 macro_rules! benchmark {
   ($c:ident, $workload:path, $($input:expr),+) => {
     $(
-      benchmark!(@IMPL $c, setup_jsonfull, "base/JsonFull", $workload, $input);
-      benchmark!(@IMPL $c, setup_tsjson, "base/TSJson", $workload, $input);
+      benchmark!(@IMPL $c, setup_jsonfull, "ser/SerdeLayer", $workload, $input);
+      benchmark!(@IMPL $c, setup_tsjson, "ser/FmtLayer", $workload, $input);
     )+
   };
 

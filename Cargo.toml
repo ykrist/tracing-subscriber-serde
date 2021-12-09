@@ -34,7 +34,7 @@ name = "main"
 name = "pprint"
 
 [[bench]]
-name = "comparison"
+name = "serialization"
 harness = false
 
 [[bench]]

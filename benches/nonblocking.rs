@@ -7,8 +7,8 @@ use criterion::{Criterion, BenchmarkId, criterion_group, criterion_main};
 macro_rules! benchmark {
   ($c:ident, $workload:path, $($input:expr),+) => {
     $(
-      benchmark!(@IMPL $c, setup_jsonfull_nb, "NB/JsonFull", $workload, $input);
-      benchmark!(@IMPL $c, setup_tsjson_nb, "NB/TSJson", $workload, $input);
+      benchmark!(@IMPL $c, setup_jsonfull_nb, "NB/SerdeLayer", $workload, $input);
+      benchmark!(@IMPL $c, setup_tsjson_nb, "NB/FmtLayer", $workload, $input);
     )*
   };
 
@@ -29,8 +29,8 @@ macro_rules! benchmark {
 
 fn comparison(c: &mut Criterion) {
   benchmark!(c, workloads::simple, 5, 10);
-  // benchmark!(c, workloads::deeply_nested, (15, 10));
-  // benchmark!(c, workloads::long_strings, 5, 10);
+  benchmark!(c, workloads::deeply_nested, (15, 10));
+  benchmark!(c, workloads::long_strings, 5, 10);
 }
 
 criterion_group!(benches, comparison);

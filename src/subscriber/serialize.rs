@@ -43,8 +43,6 @@ pub struct Event<'a, 'b> {
   #[serde(rename="s")]
   pub spans: Spans<'a>,
 
-  // TODO span ID
-
   #[serde(rename="t")]
   pub target: &'a str,
 
@@ -73,7 +71,7 @@ pub struct Event<'a, 'b> {
 
 #[derive(Debug, Clone)]
 enum SpanItem<'a> {
-  Name(&'a str),
+  Start { span_name: &'a str, id: Option<NonZeroU64> },
   Field{ name: &'a str, val: FieldValue }
 }
 
@@ -105,8 +103,8 @@ impl<'a> Spans<'a> {
     spanlist
   }
 
-  pub fn new_span(&mut self, name: &'a str) {
-    self.0.push(SpanItem::Name(name));
+  pub fn new_span(&mut self, name: &'a str, span_id: Option<NonZeroU64>) {
+    self.0.push(SpanItem::Start { span_name: name, id: span_id });
   }
 
 
@@ -165,8 +163,11 @@ impl Serialize for SerializeSpan<'_> {
     let fields = &(self.0)[1..];
 
     match name {
-      SpanItem::Name(n) => {
-        m.serialize_entry("n", n)?;
+      SpanItem::Start{ span_name, id } => {
+        m.serialize_entry("n", span_name)?;
+        if let Some(id) = id {
+          m.serialize_entry("i", id)?;
+        }
       }
       _ => unreachable!(),
     }
@@ -186,7 +187,7 @@ impl Serialize for Spans<'_> {
     if !items.is_empty() {
       let mut start = 0;
       for (next_start, item) in items.iter().enumerate().skip(1) {
-        if matches!(item, SpanItem::Name(_)) {
+        if matches!(item, SpanItem::Start{..}) {
           seq.serialize_element(&SerializeSpan(&items[start..next_start]))?;
           start = next_start;
         }
@@ -243,7 +244,7 @@ mod tests {
       ]),
       level: Level::Trace,
       spans: Spans(vec![
-        SpanItem::Name("hello_world"),
+        SpanItem::Start{ span_name: "hello_world", id: NonZeroU64::new(1) },
         SpanItem::Field{ name: "field", val: FieldValue::Bool(false) },
       ]),
       target: "foo",
@@ -274,6 +275,7 @@ mod tests {
     assert_eq!(de.spans.len(), 1);
     let span = &de.spans[0];
     assert_eq!(&span.name, "hello_world");
+    assert_eq!(&span.id, &NonZeroU64::new(1));
     assert_eq!(span.fields.len(), 1);
     assert_field_values_eq!(span.fields["field"], FieldValue::Bool(false));
 

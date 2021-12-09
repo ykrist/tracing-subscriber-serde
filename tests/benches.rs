@@ -41,6 +41,6 @@ fn same_number_of_records() {
 
   assert_eq!(ts_json.lines().count(), full_json.lines().count());
 
-  std::fs::remove_file("ts.json").ok();
-  std::fs::remove_file("full.json").ok();
+  // std::fs::remove_file("ts.json").ok();
+  // std::fs::remove_file("full.json").ok();
 }

@@ -2,6 +2,42 @@ use ansi_term::{Colour};
 use crate::{Event, Level, FieldValue, EventKind, Span};
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::time::Duration;
+use std::num::NonZeroU64;
+
+fn base64_id(id: NonZeroU64) -> [u8; 12] {
+  const ALPHABET : &'static [u8] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".as_bytes();
+
+  // Mix the bits up (invertible hash function) to make the IDs look more different.
+  // Shamelessly stolen from https://stackoverflow.com/questions/664014/what-integer-hash-function-are-good-that-accepts-an-integer-hash-key
+  let mut id = u64::from(id);
+  id = (id ^ (id >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+  id = (id ^ (id >> 27)).wrapping_mul(0x94d049bb133111eb);
+  id = id ^ (id >> 31);
+
+
+  let mut output = [0; 12];
+  let mut bytes = [0u8; 9];
+  bytes[..8].copy_from_slice(&u64::from(id).to_be_bytes());
+
+  let mut k = 0usize;
+
+  for start in [0usize, 3, 6] {
+    let chunk = [
+      ((bytes[start] & 0b1111_1100) >> 2),
+      ((bytes[start] & 0b0000_0011 ) << 4) | ((bytes[start + 1] & 0b1111_0000) >> 4),
+      ((bytes[start + 1] & 0b0000_1111) << 2) | (bytes[start + 2] & 0b1100_0000 >> 6),
+      (bytes[start + 2] & 0b0011_1111),
+    ];
+
+    for b in chunk {
+      output[k] = ALPHABET[b as usize];
+      k += 1;
+    }
+  }
+
+  debug_assert_eq!(k, output.len());
+  output
+}
 
 /// Configuration of pretty formatting for events.
 #[derive(Debug, Copy, Clone)]
@@ -10,6 +46,7 @@ pub struct PrettyPrinter {
   target: bool,
   span_times: bool,
   limit_spans: usize,
+  span_ids: bool,
   continue_line: &'static str,
 }
 
@@ -33,6 +70,7 @@ impl Default for PrettyPrinter {
       source: true,
       target: true,
       span_times: true,
+      span_ids: false,
       limit_spans: usize::MAX,
       continue_line: "  | ",
     }
@@ -47,6 +85,11 @@ impl PrettyPrinter {
 
   pub fn show_source(mut self, on: bool) -> Self {
     self.source = on;
+    self
+  }
+
+  pub fn show_span_ids(mut self, on: bool) -> Self {
+    self.span_ids = on;
     self
   }
 
@@ -153,10 +196,15 @@ impl Display for FmtEvent<'_> {
 
 impl Display for FmtSpan<'_> {
   fn fmt(&self, f: &mut Formatter) -> FmtResult {
-    f.write_fmt(format_args!(
-      "{}{{",
-      Colour::White.bold().paint(&self.span.name),
-    ))?;
+
+    if self.printer.span_ids {
+      if let Some(id) = self.span.id {
+        let id = base64_id(id);
+        write!(f, "{} ", Colour::RGB(150,150,150).paint(std::str::from_utf8(&id).unwrap()))?;
+      }
+    }
+    Colour::White.bold().paint(&self.span.name).fmt(f)?;
+    f.write_str("{")?;
     self.printer.fmt_fields(f, &self.span.fields)?;
     f.write_str("}")?;
     Ok(())
