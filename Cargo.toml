@@ -1,5 +1,5 @@
 [package]
-name = "tracing-subscriber-json-full"
+name = "tracing-subscriber-serde"
 version = "0.1.0"
 edition = "2018"
 

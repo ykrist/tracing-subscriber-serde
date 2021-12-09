@@ -1,7 +1,7 @@
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::filter::EnvFilter;
-use tracing_subscriber_json_full::{SerdeLayer, time::SystemClock, FmtSpan};
+use tracing_subscriber_serde::{SerdeLayer, time::SystemClock, FmtSpan};
 
 fn creates_spans_and_events() {
   use tracing::*;
@@ -29,9 +29,9 @@ fn main() -> anyhow::Result<()> {
         .with_clock(SystemClock::default())
         .time_spans(true)
         .source_location(true)
-        .time_spans(true)
         .with_span_events(FmtSpan::FULL)
-        .with_writer(std::io::stderr())
+        .with_threads(true, true)
+        .with_writer(std::io::stdout())
         .finish())
       .with(EnvFilter::from_default_env())
       .init();

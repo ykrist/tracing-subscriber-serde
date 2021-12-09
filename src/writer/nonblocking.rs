@@ -1,35 +1,14 @@
 use flume::{Receiver, Sender, TrySendError};
-use std::io::{Write, self, Stdout, Stderr};
+use std::io::{Write, self};
 
 use std::thread::JoinHandle;
 
 use serde::Serialize;
+
 use crate::subscriber::SerdeFormat;
+use super::WriteEvent;
 
-const DEFAULT_BUF_SIZE: usize = 1024;
-
-pub trait WriteRecord {
-  fn write(&self, fmt: impl SerdeFormat, record: impl Serialize);
-}
-
-impl<'a, T: WriteRecord> WriteRecord for &'a T {
-  fn write(&self, fmt: impl SerdeFormat, record: impl Serialize) {
-    <T as WriteRecord>::write(self, fmt, record)
-  }
-}
-
-macro_rules! impl_writerecord_for_stdpipe {
-    ($t:path) => {
-      impl WriteRecord for $t {
-        fn write(&self, fmt: impl SerdeFormat, record: impl Serialize) {
-          fmt.serialize(self.lock(), record);
-        }
-      }
-    };
-}
-
-impl_writerecord_for_stdpipe!(Stdout);
-impl_writerecord_for_stdpipe!(Stderr);
+pub const DEFAULT_BUFFERED_RECORDS_LIMIT: usize = 128_000;
 
 
 #[derive(Clone, Debug)]
@@ -42,16 +21,12 @@ impl Default for Builder {
   fn default() -> Self {
     Builder {
       lossy: false,
-      max_buffered_records: DEFAULT_BUF_SIZE,
+      max_buffered_records: DEFAULT_BUFFERED_RECORDS_LIMIT,
     }
   }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum Message {
-  Record(Vec<u8>),
-  Shutdown,
-}
+const PANIC_MSG_DEAD_WRITER : &'static str = "writer thread has died";
 
 
 impl Builder {
@@ -77,7 +52,12 @@ impl Builder {
   }
 }
 
-pub fn nonblocking() -> Builder { Builder::default() }
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum Message {
+  Record(Vec<u8>),
+  Shutdown,
+}
 
 #[derive(Clone, Debug)]
 pub struct NonBlocking {
@@ -99,11 +79,14 @@ impl Drop for FlushGuard {
   }
 }
 
+impl NonBlocking {
+  pub fn new() -> Builder { Builder::default() }
+}
 
-impl WriteRecord for NonBlocking {
-  fn write(&self, fmt: impl SerdeFormat, record: impl Serialize) {
+impl WriteEvent for NonBlocking {
+  fn write(&self, fmt: impl SerdeFormat, event: impl Serialize) -> io::Result<()> {
     let mut buf = Vec::with_capacity(fmt.message_size_hint());
-    fmt.serialize(&mut buf, record);
+    fmt.serialize(&mut buf, event).expect("bug: Failed to serialize event");
     if self.lossy {
       match self.sender.try_send(Message::Record(buf)) {
         Err(TrySendError::Disconnected(_)) => panic!("{}", PANIC_MSG_DEAD_WRITER),
@@ -112,11 +95,9 @@ impl WriteRecord for NonBlocking {
     } else {
       self.sender.send(Message::Record(buf)).expect(PANIC_MSG_DEAD_WRITER);
     }
+    Ok(())
   }
 }
-
-
-const PANIC_MSG_DEAD_WRITER : &'static str = "writer thread has died";
 
 struct WriterThread<W> {
   queue: Receiver<Message>,
@@ -258,11 +239,11 @@ mod tests {
   fn interrupts() {
     let writer = TestWriter::new(None, None);
     let buffer = Arc::clone(&writer.buffer);
-    let (writer, g) = nonblocking().finish(writer);
+    let (writer, g) = NonBlocking::new().finish(writer);
 
     for message in 0..5 {
       // First two messages will get buffered, others will be dropped.
-      writer.write(JsonFormat, message);
+      writer.write(JsonFormat, message).unwrap();
     }
 
     drop(g);
@@ -278,21 +259,21 @@ mod tests {
 
     let num_buffered = 2;
 
-    let (writer, g) = nonblocking()
+    let (writer, g) = NonBlocking::new()
       .lossy(true)
       .buf_size(num_buffered)
       .finish(writer);
 
     for message in 0..10 {
       // First two messages will get buffered, others will be dropped.
-      writer.write(JsonFormat, message);
+      writer.write(JsonFormat, message).unwrap();
     }
 
     for _ in 0..num_buffered {
       writer_continue.send();
     }
 
-    writer.write(JsonFormat, "hello world");
+    writer.write(JsonFormat, "hello world").unwrap();
     writer_continue.send();
 
     drop(g);

@@ -8,7 +8,11 @@ use std::fmt::{Debug};
 
 pub mod subscriber;
 pub use subscriber::SerdeLayer;
-pub use tracing_subscriber::fmt::format::FmtSpan;
+
+/// `SpanEvent` is re-exported [`FmtEvent`](tracing_subscriber::fmt::format::FmtSpan) from `tracing_subscriber` with
+/// a more suitable name.  Implements bitwise arithmetic operations so you can treat it as a set of bitflags.
+#[doc(inline)]
+pub use tracing_subscriber::fmt::format::FmtSpan as SpanEvents;
 
 pub mod time;
 use crate::time::{UnixTime, SpanTime};
@@ -17,8 +21,8 @@ use std::collections::HashMap;
 
 pub mod consumer;
 
-mod nonblocking;
-pub use nonblocking::{nonblocking, WriteRecord, FlushGuard};
+pub mod writer;
+pub use writer::WriteEvent;
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]

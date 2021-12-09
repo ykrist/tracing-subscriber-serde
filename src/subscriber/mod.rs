@@ -1,23 +1,25 @@
 use std::num::NonZeroU64;
 use std::fmt::{Debug, self, Write as FmtWrite};
-use std::io::{Write, Stdout};
+use std::io::{Stdout};
 use std::borrow::Cow;
 
 use serde::{Serialize};
-use tracing::{warn, Subscriber, field::Visit, field::Field, span::{Id, Attributes}, Metadata};
+use tracing::{Subscriber, field::Visit, field::Field, span::{Id, Attributes}, Metadata};
 use tracing_subscriber::registry::{LookupSpan, SpanRef};
 use tracing_subscriber::layer::{Context, Layer};
-
 
 use smallvec::SmallVec;
 use smartstring::alias::String as SString;
 
 use crate::time::{UnixTime, Clock, SpanTime, SpanTimer};
-use crate::FmtSpan;
+use crate::{SpanEvents, WriteEvent};
 
 mod serialize;
+mod format;
+
 use serialize::*;
-use crate::nonblocking::WriteRecord;
+pub use format::*;
+
 
 trait AddFields {
   fn add_field(&mut self, name: &'static str, val: FieldValue);
@@ -84,7 +86,7 @@ impl<T: AddFields> Visit for FieldVisitor<T> {
 
 pub struct SerdeLayerBuilder<F, C, W> {
   source_location: bool,
-  span_events: FmtSpan,
+  span_events: SpanEvents,
   time_spans: bool,
   fmt: F,
   writer: W,
@@ -93,9 +95,20 @@ pub struct SerdeLayerBuilder<F, C, W> {
   thread_id: bool,
 }
 
-
+/// A tracing-subscriber [`Layer`](tracing_subscriber::Layer) which serializes events to any
+///  [serde-supported format](https://docs.rs/serde)
+///
+/// The events can be later deserialized using serde with the provided [`Event`](crate::Event) type.
+///
+/// The layer is parameterised by three types:
+/// - `F` : the [`SerdeFormat`] you want to use, the default is [`JsonFormat`].
+/// - `C` : the [`Clock`] used to optionally produce timestamps.  The default is `()`, which is no clock.
+/// - `W` : the [`WriteEvent`] writer used for output.
+///
+/// See [`SerdeLayerBuilder`] for details on configuration and options.
 pub struct SerdeLayer<F, C, W> {
   thread_name: bool,
+  #[cfg_attr(not(feature = "thread_id"), allow(dead_code))]
   thread_id: bool,
   source_location: bool,
   record_span_enter: bool,
@@ -108,49 +121,11 @@ pub struct SerdeLayer<F, C, W> {
   clock: C,
 }
 
-pub trait SerdeFormat {
-  fn message_size_hint(&self) -> usize;
-
-  fn serialize(&self, buf: impl Write, record: impl Serialize);
-}
-
-impl<'a, T: SerdeFormat> SerdeFormat for &'a T {
-  fn message_size_hint(&self) -> usize { T::message_size_hint(self) }
-
-  fn serialize(&self, buf: impl Write, record: impl Serialize) {
-    T::serialize(self, buf, record)
-  }
-}
-
-
-#[derive(Copy, Clone, Debug)]
-pub struct JsonFormat;
-
-impl SerdeFormat for JsonFormat {
-  fn message_size_hint(&self) -> usize { 512 }
-
-  fn serialize(&self, mut buf: impl Write, record: impl Serialize) {
-    #[cfg(debug_assertions)] {
-      serde_json::to_writer(&mut buf, &record).unwrap();
-      buf.write("\n".as_bytes()).unwrap();
-    }
-
-    #[cfg(not(debug_assertions))] {
-      if let Err(e) = serde_json::to_writer(&mut writer, &record) {
-        eprintln!("bug: error serializing event: {}", e);
-      } else {
-        if let Err(e) = buf.write("\n".as_bytes()) {
-          eprintln!("I/O error: {}", &e);
-        }
-      }
-    }
-  }
-}
-
 
 
 
 impl SerdeLayer<JsonFormat, (), Stdout> {
+  /// Start building a new layer.
   pub fn new() -> SerdeLayerBuilder<JsonFormat, (), Stdout> {
     SerdeLayerBuilder {
       thread_name: false,
@@ -169,15 +144,21 @@ impl<F, C, W> SerdeLayerBuilder<F, C, W>
 where
   F: SerdeFormat,
   C: Clock,
-  W: WriteRecord,
+  W: WriteEvent,
 {
+  /// Output events using a given [`WriteEvent`] writer.
+  ///
+  /// See the trait documentation on how to implement.
+  ///
+  /// Will accept [`Stdout`], [`Stdout`], [`NonBlocking`](crate::writer::NonBlocking)
+  /// and [`Mutex<W>`](std::sync::Mutex) where `W: io::Write`.
   pub fn with_writer<W2>(self, writer: W2) -> SerdeLayerBuilder<F, C, W2>
     where
-      W2: WriteRecord
+      W2: WriteEvent
   {
     SerdeLayerBuilder {
       thread_name: self.thread_name,
-      thread_id: self.thread_name,
+      thread_id: self.thread_id,
       source_location: self.source_location,
       span_events: self.span_events,
       time_spans: self.time_spans,
@@ -187,10 +168,14 @@ where
     }
   }
 
+  /// Use the supplied [`Clock`] to produce timestamps.
+  ///
+  /// Span timings (busy/idle) will use [`std::time::Instant`] regardless
+  /// of the clock, this only affects the `timestamp` field of [`Event`](crate::Event).
   pub fn with_clock<C2: Clock>(self, clock: C2) -> SerdeLayerBuilder<F, C2, W> {
     SerdeLayerBuilder {
       thread_name: self.thread_name,
-      thread_id: self.thread_name,
+      thread_id: self.thread_id,
       source_location: self.source_location,
       span_events: self.span_events,
       time_spans: self.time_spans,
@@ -200,19 +185,22 @@ where
     }
   }
 
+  ///
   pub fn time_spans(mut self, enable: bool) -> Self {
     self.time_spans = enable;
     self
   }
 
-  pub fn with_span_events(mut self, e: FmtSpan) -> Self {
+  /// Control the output of synthesised events when spans
+  /// are constructed/entered and destroyed/exited.
+  pub fn with_span_events(mut self, e: SpanEvents) -> Self {
     self.span_events = e;
     self
   }
 
   pub fn with_threads(mut self, names: bool, ids: bool) -> Self {
     if cfg!(not(feature = "thread_id")) && ids {
-      warn!("Logging thread IDs requires the 'thread_id' feature which is currently disabled.");
+      eprintln!("Logging thread IDs requires the 'thread_id' feature which is currently disabled.");
     }
     self.thread_name = names;
     self.thread_id = ids;
@@ -251,7 +239,7 @@ impl<F, C, W> SerdeLayer<F, C, W>
   where
     F: SerdeFormat,
     C: Clock,
-    W: WriteRecord,
+    W: WriteEvent,
 {
   fn emit_event<'a>(&self, meta: &Metadata<'a>, spans: Spans<'a>, e: EventKind<'a>) {
     let thread = std::thread::current();
@@ -283,8 +271,9 @@ impl<F, C, W> SerdeLayer<F, C, W>
       thread_name,
     };
 
-
-    self.writer.write(&self.fmt, &event);
+    // If users want their errors handled they can choose themselves
+    // using a wrapper type over their chosen WriteRecord
+    let _ = self.writer.write(&self.fmt, &event);
   }
 }
 
@@ -306,7 +295,7 @@ impl<F, C, W, S> Layer<S> for SerdeLayer<F, C, W>
     where
     F: SerdeFormat + 'static,
     C: Clock + 'static,
-    W: WriteRecord + 'static,
+    W: WriteEvent + 'static,
     S: Subscriber + for<'l> LookupSpan<'l>,
 {
   fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {

@@ -5,10 +5,11 @@ use std::path::{PathBuf, Path};
 use tracing_subscriber::fmt::{MakeWriter, writer::MutexGuardWriter};
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber_json_full::{SerdeLayer, WriteRecord, subscriber::SerdeFormat, FlushGuard};
+use tracing_subscriber_json_full::{SerdeLayer, WriteEvent, subscriber::SerdeFormat, writer::{FlushGuard, NonBlocking}};
 use tracing::Subscriber;
 use tracing_appender::non_blocking::{WorkerGuard, NonBlockingBuilder};
 use serde::Serialize;
+use std::io;
 
 pub struct InMemoryWriter {
   inner: Arc<Mutex<Vec<u8>>>,
@@ -43,10 +44,10 @@ impl<'a> MakeWriter<'a> for InMemoryWriter {
   }
 }
 
-impl WriteRecord for InMemoryWriter {
-  fn write(&self, fmt: impl SerdeFormat, record: impl Serialize) {
+impl WriteEvent for InMemoryWriter {
+  fn write(&self, fmt: impl SerdeFormat, record: impl Serialize) -> io::Result<()>  {
     let buf = &mut *self.inner.lock().unwrap();
-    fmt.serialize(buf, record);
+    fmt.serialize(buf, record)
   }
 }
 
@@ -77,7 +78,7 @@ pub fn setup_tsjson_nb() -> (impl Subscriber + Send + Sync + 'static, WorkerGuar
 
 
 pub fn setup_jsonfull_nb() -> (impl Subscriber + Send + Sync + 'static, FlushGuard) {
-  let (writer, g) = tracing_subscriber_json_full::nonblocking()
+  let (writer, g) = NonBlocking::new()
     .finish(Vec::<u8>::with_capacity(WRITE_BUF_SIZE));
 
   let s = tracing_subscriber::registry()
