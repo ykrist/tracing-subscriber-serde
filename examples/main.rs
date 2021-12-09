@@ -3,8 +3,8 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber_serde::{SerdeLayer, time::SystemClock, SpanEvents};
 
-
-
+mod common;
+use common::*;
 
 fn main() -> anyhow::Result<()> {
   tracing_subscriber::registry()

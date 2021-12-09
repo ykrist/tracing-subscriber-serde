@@ -17,7 +17,7 @@ impl SpanTime {
 
   /// The number of nanoseconds this span spent idle
   pub fn idle(&self) -> u64 {
-    self.busy
+    self.idle
   }
 }
 

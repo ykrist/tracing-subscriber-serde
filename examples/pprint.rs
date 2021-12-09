@@ -25,7 +25,11 @@ fn main() -> anyhow::Result<()> {
 
   let buffer = buffer.lock().expect("Mutex poisoned");
 
-  let printer = PrettyPrinter::default();
+  let printer = PrettyPrinter::default()
+    .show_target(false)
+    .limit_spans(10); // show at most N spans per event
+
+
   for event in iter_json_reader(buffer.as_slice()) {
     let event = event?;
     printer.print(&event);
