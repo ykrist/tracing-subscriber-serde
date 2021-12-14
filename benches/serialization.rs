@@ -1,9 +1,7 @@
 mod common;
 use common::*;
 
-use criterion::{Criterion, BenchmarkId, criterion_group, criterion_main};
-
-
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 
 macro_rules! benchmark {
   ($c:ident, $workload:path, $($input:expr),+) => {
@@ -26,11 +24,10 @@ macro_rules! benchmark {
   };
 }
 
-
 fn comparison(c: &mut Criterion) {
-  benchmark!(c, workloads::simple, 5, 10 , 100);
-  benchmark!(c, workloads::deeply_nested, (15, 10));
-  benchmark!(c, workloads::long_strings, 5, 10);
+    benchmark!(c, workloads::simple, 5, 10, 100);
+    benchmark!(c, workloads::deeply_nested, (15, 10));
+    benchmark!(c, workloads::long_strings, 5, 10);
 }
 
 criterion_group!(benches, comparison);

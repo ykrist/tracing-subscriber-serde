@@ -12,14 +12,13 @@
 //! | `consumer` | Yes | Consumer API for pretty-printing events | [`ansi_term`] crate |
 //!
 
-
 /// `SpanEvent` is re-exported [`FmtEvent`](tracing_subscriber::fmt::format::FmtSpan) from `tracing_subscriber` with
 /// a more suitable name.  Implements bitwise arithmetic operations so you can treat it as a set of bitflags.
 #[doc(inline)]
 pub use tracing_subscriber::fmt::format::FmtSpan as SpanEvents;
 
-mod subscriber;
 mod event;
+mod subscriber;
 
 #[cfg(test)]
 pub(crate) mod test_utils;
@@ -28,17 +27,17 @@ pub(crate) mod test_utils;
 #[cfg_attr(docsrs, doc(cfg(feature = "consumer")))]
 #[cfg(any(feature = "consumer"))]
 pub mod consumer;
-pub mod writer;
-pub mod time;
 pub mod format;
+pub mod time;
+pub mod writer;
 
 #[doc(inline)]
-pub use subscriber::{SerdeLayerBuilder, SerdeLayer};
-#[doc(inline)]
-pub use writer::WriteEvent;
+pub use event::{Event, EventKind, FieldValue, Level, Span};
 #[doc(inline)]
 pub use format::SerdeFormat;
 #[doc(inline)]
-pub use event::{FieldValue, Event, EventKind, Level, Span};
+pub use subscriber::{SerdeLayer, SerdeLayerBuilder};
+#[doc(inline)]
+pub use writer::WriteEvent;
 
 pub use serde;

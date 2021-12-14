@@ -8,10 +8,6 @@ mod ser {
     pub use FieldValue::*;
 }
 
-pub fn events(count: usize) -> Vec<Event> {
-    todo!()
-}
-
 pub fn float_eq(a: f64, b: f64) -> bool {
     // Safety: f64 and u64 have the same size and alignment, and every 64-bit-pattern is
     // valid for u64.
@@ -150,19 +146,15 @@ pub fn eq_event(a: &Event, b: &Event) -> bool {
         && thread_name == &b.thread_name
         && src_line == &b.src_line
         && src_file == &b.src_file
-        && spans.len() == b.spans.len()
-    ) {
+        && spans.len() == b.spans.len())
+    {
         return false;
     }
 
     for (a, b) in spans.iter().zip(&b.spans) {
-        if !(
-            &a.name == &b.name
-            && a.id == b.id
-            && a.fields == b.fields
-        ) {
-            return false
+        if !(&a.name == &b.name && a.id == b.id && a.fields == b.fields) {
+            return false;
         }
     }
-    true    
+    true
 }
