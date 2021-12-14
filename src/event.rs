@@ -110,7 +110,7 @@ impl_field_value_from! {
 }
 
 /// The type of event which occured
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum EventKind {

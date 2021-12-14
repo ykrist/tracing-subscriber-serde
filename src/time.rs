@@ -3,10 +3,10 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH, Instant};
 use serde::{Deserialize, Serialize};
 
 /// Timing information about a span's lifetime.
-#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct SpanTime {
-  busy: u64,
-  idle: u64
+  pub(crate) busy: u64,
+  pub(crate) idle: u64
 }
 
 impl SpanTime {

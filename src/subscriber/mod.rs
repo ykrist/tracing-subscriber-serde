@@ -15,7 +15,7 @@ use crate::time::{UnixTime, Clock, SpanTime, SpanTimer};
 use crate::{SpanEvents, WriteEvent, SerdeFormat};
 use crate::format::Json;
 
-mod serialize;
+pub(crate) mod serialize;
 
 use serialize::*;
 

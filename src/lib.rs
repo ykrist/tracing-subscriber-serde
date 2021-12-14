@@ -21,6 +21,9 @@ pub use tracing_subscriber::fmt::format::FmtSpan as SpanEvents;
 mod subscriber;
 mod event;
 
+#[cfg(test)]
+pub(crate) mod test_utils;
+
 //
 #[cfg_attr(docsrs, doc(cfg(feature = "consumer")))]
 #[cfg(any(feature = "consumer"))]
