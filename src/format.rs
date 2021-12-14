@@ -58,6 +58,39 @@ impl SerdeFormat for Json {
     }
 }
 
+// TODO: feature-gate this 
+pub use msg_pack::MessagePack;
+mod msg_pack {
+    use super::*;
+    
+    #[derive(Clone, Copy, Debug)]
+    pub struct MessagePack;
+    
+    impl SerdeFormat for MessagePack {
+        fn message_size_hint(&self) -> usize {
+            512
+        }
+    
+        fn serialize(&self, mut buf: impl Write, event: impl Serialize) -> std::io::Result<()> {
+            use rmp::encode::ValueWriteError;
+            use rmp_serde::encode::Error;
+            let mut s = rmp_serde::Serializer::new(buf).with_struct_map();
+            match event.serialize(&mut s) {
+                Err(Error::InvalidValueWrite(e)) => match e {
+                    ValueWriteError::InvalidDataWrite(e) | ValueWriteError::InvalidMarkerWrite(e) => {
+                        Err(e)
+                    }
+                },
+                Ok(()) => Ok(()),
+                Err(_) => unreachable!(),
+            }
+        }
+    }
+}
+
+
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -79,15 +112,19 @@ mod tests {
         let mut events = Vec::new();
         let mut buffer = Vec::new();
 
+        let mut data_len = 0;
         for e in evnts {
             fmt.serialize(&mut buffer, &e).unwrap();
             events.push(e);
+            let sz = buffer.len() - data_len;
+            eprintln!("serialized {} bytes", sz);
+            data_len = buffer.len();
         }
 
         let deserialized = deserialize(&buffer);
         dbg!(events.len());
         assert_eq!(events.len(), deserialized.len());
-
+        
         for (orig, de) in events.iter().zip(&deserialized) {
             if !eq_event(orig, de) {
                 eprintln!("  serialized = {:?}", orig);
@@ -206,8 +243,6 @@ mod tests {
 
     #[test]
     fn json() {
-        let fmt = Json;
-
         fn deserialize(buf: &[u8]) -> Vec<Event> {
             serde_json::de::Deserializer::from_slice(buf)
                 .into_iter()
@@ -215,6 +250,23 @@ mod tests {
                 .collect()
         }
 
-        test_format(fmt, events(), deserialize);
+        test_format(Json, events(), deserialize);
+    }
+
+    #[test]
+    fn msgpack() {
+        fn deserialize(buf: &[u8]) -> Vec<Event> {
+            use serde::Deserialize;
+            eprintln!("deserializing {:?} bytes...", buf.len());
+            let mut d = rmp_serde::decode::Deserializer::new(buf);
+            let mut events = Vec::new();
+            while d.get_ref().len() > 0 {
+                let e = Event::deserialize(&mut d).unwrap();
+                events.push(e);
+            }
+            events
+        }
+
+        test_format(MessagePack, events(), deserialize);
     }
 }
