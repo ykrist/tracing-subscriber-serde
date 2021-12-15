@@ -6,7 +6,8 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 macro_rules! benchmark {
   ($c:ident, $workload:path, $($input:expr),+) => {
     $(
-      benchmark!(@IMPL $c, setup_jsonfull, "ser/SerdeLayer", $workload, $input);
+      benchmark!(@IMPL $c, setup_serde_json, "ser/SerdeJson", $workload, $input);
+      benchmark!(@IMPL $c, setup_serde_messagepack, "ser/SerdeMsgPack", $workload, $input);
       benchmark!(@IMPL $c, setup_tsjson, "ser/FmtLayer", $workload, $input);
     )+
   };

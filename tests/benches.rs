@@ -28,7 +28,7 @@ fn same_number_of_records() {
     tracing::subscriber::with_default(s, || bench_utils::workloads::simple(5));
     drop(g);
 
-    let (s, g) = bench_utils::setup_jsonfull(Some("full.json"));
+    let (s, g) = bench_utils::setup_serde_json(Some("full.json"));
     tracing::subscriber::with_default(s, || bench_utils::workloads::simple(5));
     drop(g);
 

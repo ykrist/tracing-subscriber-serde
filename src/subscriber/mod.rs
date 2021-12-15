@@ -213,6 +213,21 @@ where
         self
     }
 
+    /// 
+    pub fn with_format<F2: SerdeFormat>(self, fmt: F2) -> SerdeLayerBuilder<F2, C, W> {
+        SerdeLayerBuilder {
+            thread_name: self.thread_name,
+            thread_id: self.thread_id,
+            source_location: self.source_location,
+            span_events: self.span_events,
+            time_spans: self.time_spans,
+            span_ids: self.span_ids,
+            writer: self.writer,
+            fmt,
+            clock: self.clock,
+        }
+    }
+
     /// Finish configuration.
     pub fn finish(self) -> SerdeLayer<F, C, W> {
         macro_rules! bit_is_set {
