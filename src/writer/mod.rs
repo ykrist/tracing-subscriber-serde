@@ -5,11 +5,22 @@
 use crate::SerdeFormat;
 use serde::Serialize;
 use std::io::{self, Stderr, Stdout, Write};
-use std::sync::{Arc, Mutex};
-
-// FIXME: don't panic when getting a poisoned Mutex
+use std::sync::{Arc, LockResult, Mutex};
 
 mod nonblocking;
+
+trait LockResultExt<Guard> {
+    fn ignore_poisoned(self) -> Guard;
+}
+
+impl<Guard> LockResultExt<Guard> for LockResult<Guard> {
+    fn ignore_poisoned(self) -> Guard {
+        match self {
+            Ok(g) => g,
+            Err(poisoned_err) => poisoned_err.into_inner(),
+        }
+    }
+}
 
 pub use nonblocking::{FlushGuard, NonBlocking, NonBlockingBuilder};
 
@@ -75,7 +86,7 @@ impl_writeevent_for_stdpipe!(Stderr);
 
 impl<W: Write> WriteEvent for Mutex<W> {
     fn write(&self, fmt: impl SerdeFormat, event: impl Serialize) -> io::Result<()> {
-        let writer = &mut *self.lock().expect("Writer mutex poisoned");
+        let writer = &mut *self.lock().ignore_poisoned();
         fmt.serialize(writer, event)
     }
 }

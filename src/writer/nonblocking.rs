@@ -15,12 +15,14 @@ pub const DEFAULT_BUFFERED_RECORDS_LIMIT: usize = 128_000;
 pub struct NonBlockingBuilder {
     lossy: bool,
     max_buffered_records: usize,
+    print_io_errors: bool,
 }
 
 impl Default for NonBlockingBuilder {
     fn default() -> Self {
         NonBlockingBuilder {
             lossy: false,
+            print_io_errors: true,
             max_buffered_records: DEFAULT_BUFFERED_RECORDS_LIMIT,
         }
     }
@@ -29,6 +31,12 @@ impl Default for NonBlockingBuilder {
 const PANIC_MSG_DEAD_WRITER: &'static str = "writer thread has died";
 
 impl NonBlockingBuilder {
+    /// Don't print I/O errors from the Writer thread to STDERR.
+    pub fn silence_io_errors(mut self) -> Self {
+        self.print_io_errors = false;
+        self
+    }
+
     /// Sets the maximum number of events buffered. See [`NonBlockingBuilder::lossy`] on behaviour
     /// when the buffer is full.
     pub fn buf_size(mut self, sz: usize) -> Self {
@@ -45,7 +53,7 @@ impl NonBlockingBuilder {
 
     /// Finish configuration.
     pub fn finish<W: Write + Send + 'static>(self, writer: W) -> (NonBlocking, FlushGuard) {
-        let guard = WriterThread::spawn(writer, self.max_buffered_records);
+        let guard = WriterThread::spawn(writer, self.max_buffered_records, self.print_io_errors);
 
         let writer = NonBlocking {
             sender: guard.sender.clone(),
@@ -120,15 +128,17 @@ impl WriteEvent for NonBlocking {
 struct WriterThread<W> {
     queue: Receiver<Message>,
     writer: W,
+    print_io_errs: bool,
 }
 
 impl<W: Write + Send + 'static> WriterThread<W> {
-    pub fn spawn(writer: W, max_buffered: usize) -> FlushGuard {
+    pub fn spawn(writer: W, max_buffered: usize, print_io_errs: bool) -> FlushGuard {
         let (sender, receiver) = flume::bounded(max_buffered);
 
         let mut thread = WriterThread {
             queue: receiver,
             writer,
+            print_io_errs,
         };
 
         let thread_handle = std::thread::spawn(move || thread.run());
@@ -140,9 +150,10 @@ impl<W: Write + Send + 'static> WriterThread<W> {
     }
 
     fn handle_io_err(&mut self, err: Option<io::Error>) {
-        if let Some(e) = err {
-            // TODO allow user to shut this up
-            eprintln!("WriterThread: failed to write log record: {}", e)
+        if self.print_io_errs {
+            if let Some(e) = err {
+                eprintln!("WriterThread: failed to write log record: {}", e)
+            }
         }
     }
 

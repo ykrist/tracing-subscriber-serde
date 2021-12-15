@@ -216,7 +216,7 @@ mod tests {
     use super::*;
     use crate::test_utils::*;
 
-    // TODO should probably fuzz this
+    // TODO: should probably fuzz this
     #[test]
     fn serde_borrowed_to_owned() {
         let e = Event {
