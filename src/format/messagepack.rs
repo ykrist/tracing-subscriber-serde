@@ -44,16 +44,6 @@ mod consumer {
     use crate::consumer::*;
     use crate::Event;
     use std::io::{Read, self};
-
-    impl<R: Read> StreamFormat<R> for MessagePack {
-        type Stream = MessagePackStream<R>;
-    
-        fn iter_reader(self, reader: R) -> Self::Stream {
-            MessagePackStream{ 
-                deserializer: Deserializer::new(reader)
-            }
-        }
-    }
     
     /// A stream of [`Event`s](crate::Event) serialized in MessagePack format.
     /// 
@@ -82,6 +72,16 @@ mod consumer {
                     err.unwrap();
                     unreachable!()
                 }
+            }
+        }
+    }
+
+    impl<R: Read> StreamFormat<R> for MessagePack {
+        type Stream = MessagePackStream<R>;
+    
+        fn iter_reader(&self, reader: R) -> Self::Stream {
+            MessagePackStream{ 
+                deserializer: Deserializer::new(reader)
             }
         }
     }

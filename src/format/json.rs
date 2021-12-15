@@ -46,7 +46,7 @@ mod consumer {
     impl<R: Read> StreamFormat<R> for Json {
         type Stream = JsonStream<R>;
     
-        fn iter_reader(self, reader: R) -> Self::Stream {
+        fn iter_reader(&self, reader: R) -> Self::Stream {
             JsonStream{ 
                 stream: serde_json::Deserializer::from_reader(reader).into_iter::<Event>()
             }
