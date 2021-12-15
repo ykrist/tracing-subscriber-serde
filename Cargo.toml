@@ -15,8 +15,8 @@ rustdoc-args = ["--cfg", "docsrs"]
 [dependencies]
 ansi_term = { version = "^0.12", optional = true }
 flume = "0.10.9"
-rmp = "0.8.10"
-rmp-serde = "0.15.5"
+rmp = { version = "0.8.10", optional = true }
+rmp-serde = { version = "0.15.5", optional = true }
 serde = { version = "^1.0", features = ['derive'] }
 serde_json = "^1.0"
 serde_repr = "0.1.7"
@@ -28,6 +28,7 @@ tracing-subscriber = { version = "^0.3", features = ["json", "env-filter"] }
 [features]
 thread_id = []
 consumer = ["ansi_term"]
+messagepack = ["rmp", "rmp-serde"]
 
 [dev-dependencies]
 anyhow = "1.0.51"
@@ -45,6 +46,7 @@ required-features = ["consumer"]
 [[bench]]
 name = "serialization"
 harness = false
+required-features = ["messagepack"]
 
 [[bench]]
 name = "nonblocking"

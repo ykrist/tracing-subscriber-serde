@@ -213,7 +213,7 @@ where
         self
     }
 
-    /// 
+    /// Serialize events in the provided [format](SerdeFormat)
     pub fn with_format<F2: SerdeFormat>(self, fmt: F2) -> SerdeLayerBuilder<F2, C, W> {
         SerdeLayerBuilder {
             thread_name: self.thread_name,

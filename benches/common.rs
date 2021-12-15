@@ -1,24 +1,21 @@
-#![allow(dead_code)]
-
+// #![allow(dead_code)]
 use serde::Serialize;
-use tracing_subscriber_serde::SerdeLayerBuilder;
 use std::io::{self, Stdout};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tracing::Subscriber;
 use tracing_appender::non_blocking::{NonBlockingBuilder, WorkerGuard};
+use tracing_subscriber::fmt as tsfmt;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::{writer::MutexGuardWriter, MakeWriter};
-use tracing_subscriber::fmt as tsfmt;
 use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber_serde::SerdeLayerBuilder;
 use tracing_subscriber_serde::{
     format as sfmt,
     time::SystemClock,
     writer::{FlushGuard, NonBlocking},
     SerdeFormat, SerdeLayer, WriteEvent,
 };
-
-
 
 pub struct InMemoryWriter {
     inner: Arc<Mutex<Vec<u8>>>,
@@ -67,34 +64,31 @@ impl Drop for InMemoryWriterFlushGuard {
 }
 
 pub type TsJsonLayer<S> = tracing_subscriber::fmt::Layer<
-    S, 
-    tsfmt::format::JsonFields, 
+    S,
+    tsfmt::format::JsonFields,
     tsfmt::format::Format<tsfmt::format::Json>,
 >;
 
-
-fn tsjson_layer<S>() -> TsJsonLayer<S>  {
+fn tsjson_layer<S>() -> TsJsonLayer<S> {
     tracing_subscriber::fmt::Layer::new()
-    .json()
-    .with_target(true)
-    .with_span_list(true)
-    .with_current_span(false)
-    .with_span_events(FmtSpan::FULL)
+        .json()
+        .with_target(true)
+        .with_span_list(true)
+        .with_current_span(false)
+        .with_span_events(FmtSpan::FULL)
 }
-
 
 fn serde_layer<F: SerdeFormat>(f: F) -> SerdeLayerBuilder<F, SystemClock, Stdout> {
     SerdeLayer::new()
-    .with_clock(SystemClock::default())
-    .with_source_location(false)
-    .with_span_events(FmtSpan::FULL)
-    .with_format(f)
+        .with_clock(SystemClock::default())
+        .with_source_location(false)
+        .with_span_events(FmtSpan::FULL)
+        .with_format(f)
 }
 
-
 pub fn setup_tsjson_nb() -> (impl Subscriber + Send + Sync + 'static, WorkerGuard) {
-    let (writer, g) = NonBlockingBuilder::default()
-        .finish(Vec::<u8>::with_capacity(WRITE_BUF_SIZE));
+    let (writer, g) =
+        NonBlockingBuilder::default().finish(Vec::<u8>::with_capacity(WRITE_BUF_SIZE));
 
     let l = tsjson_layer().with_writer(writer);
     let s = tracing_subscriber::registry().with(l);
@@ -104,9 +98,7 @@ pub fn setup_tsjson_nb() -> (impl Subscriber + Send + Sync + 'static, WorkerGuar
 pub fn setup_serde_json_nb() -> (impl Subscriber + Send + Sync + 'static, FlushGuard) {
     let (writer, g) = NonBlocking::new().finish(Vec::<u8>::with_capacity(WRITE_BUF_SIZE));
 
-    let l = serde_layer(sfmt::Json)
-        .with_writer(writer)
-        .finish();
+    let l = serde_layer(sfmt::Json).with_writer(writer).finish();
     let s = tracing_subscriber::registry().with(l);
     (s, g)
 }
@@ -118,8 +110,7 @@ pub fn setup_tsjson(
     Option<InMemoryWriterFlushGuard>,
 ) {
     let (writer, g) = InMemoryWriter::new(filepath);
-    let l = tsjson_layer()
-        .with_writer(writer);
+    let l = tsjson_layer().with_writer(writer);
     let s = tracing_subscriber::registry().with(l);
     (s, g)
 }
@@ -131,13 +122,12 @@ pub fn setup_serde_json(
     Option<InMemoryWriterFlushGuard>,
 ) {
     let (writer, g) = InMemoryWriter::new(filepath);
-    let l = serde_layer(sfmt::Json)
-        .with_writer(writer)
-        .finish();
+    let l = serde_layer(sfmt::Json).with_writer(writer).finish();
     let s = tracing_subscriber::registry().with(l);
     (s, g)
 }
 
+#[cfg(feature = "messagepack")]
 pub fn setup_serde_messagepack(
     filepath: Option<impl AsRef<Path>>,
 ) -> (
@@ -145,13 +135,10 @@ pub fn setup_serde_messagepack(
     Option<InMemoryWriterFlushGuard>,
 ) {
     let (writer, g) = InMemoryWriter::new(filepath);
-    let l = serde_layer(sfmt::MessagePack)
-        .with_writer(writer)
-        .finish();
+    let l = serde_layer(sfmt::MessagePack).with_writer(writer).finish();
     let s = tracing_subscriber::registry().with(l);
     (s, g)
 }
-
 
 pub mod workloads {
     use tracing::*;

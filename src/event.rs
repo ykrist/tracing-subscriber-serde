@@ -5,8 +5,13 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroU64;
 
-/// The logging level of the event or span
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize_repr, Deserialize_repr)]
+/// The logging level of the event or span.
+///
+/// The actual [`tracing::Level`] type doesn't implement [`Serialize`] or [`Deserialize`], so this type is used instead.
+/// However, it can be freely converted `from` and `into` a [`tracing::Level`].
+#[derive(
+    Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize_repr, Deserialize_repr, PartialOrd, Ord,
+)]
 #[repr(u8)]
 #[allow(missing_docs)]
 pub enum Level {
@@ -25,6 +30,18 @@ impl From<tracing::Level> for Level {
             tracing::Level::INFO => Level::Info,
             tracing::Level::WARN => Level::Warn,
             tracing::Level::ERROR => Level::Error,
+        }
+    }
+}
+
+impl From<Level> for tracing::Level {
+    fn from(l: Level) -> Self {
+        match l {
+            Level::Trace => tracing::Level::TRACE,
+            Level::Debug => tracing::Level::DEBUG,
+            Level::Info => tracing::Level::INFO,
+            Level::Warn => tracing::Level::WARN,
+            Level::Error => tracing::Level::ERROR,
         }
     }
 }
@@ -145,17 +162,20 @@ pub struct Span {
     pub fields: HashMap<String, FieldValue>,
 }
 
-/// A serialized tracing event.
+/// A (de)serializable [`tracing`] event.
 ///
 /// If you want to process your stored logs, this is the type you should deserialize.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct Event {
-    /// The type of event.
+    /// The type of event.  
+    ///
+    /// For a regular, non-synthesised event (i.e `EventKind::Event(_)`), the event
+    /// fields can be found in here.
     #[serde(alias = "ty")]
     pub kind: EventKind,
 
-    /// The log level of the event or span
+    /// The log level of the event or span.
     #[serde(alias = "l")]
     pub level: Level,
 
@@ -171,13 +191,13 @@ pub struct Event {
     #[serde(alias = "t")]
     pub target: String,
 
-    /// Thread ID of the thread which produced the event
+    /// ID of the thread which produced the event
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(alias = "tid")]
     pub thread_id: Option<NonZeroU64>,
 
-    /// Thread name of the thread which produced the event
+    /// Name of the thread which produced the event
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(alias = "tn")]

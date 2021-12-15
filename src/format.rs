@@ -58,28 +58,35 @@ impl SerdeFormat for Json {
     }
 }
 
-// TODO: feature-gate this 
+#[cfg(feature = "messagepack")]
+#[cfg_attr(docsrs, doc(cfg(feature = "messagepack")))]
 pub use msg_pack::MessagePack;
+
+#[cfg(feature = "messagepack")]
 mod msg_pack {
     use super::*;
-    
+
     #[derive(Clone, Copy, Debug)]
+    /// Serialize events as a stream of binary [MessagePack](https://msgpack.org/) objects.
+    /// Serialization speed is the same as [`Json`], but with smaller messages.  The trade-off is human-readability, but
+    /// if you are planning to post-process your logs programmatically anyway, this format would be suitable.
+    ///
+    /// Requires the **`messagepack`** crate feature to be enabled.
     pub struct MessagePack;
-    
+
     impl SerdeFormat for MessagePack {
         fn message_size_hint(&self) -> usize {
             512
         }
-    
-        fn serialize(&self, mut buf: impl Write, event: impl Serialize) -> std::io::Result<()> {
+
+        fn serialize(&self, buf: impl Write, event: impl Serialize) -> std::io::Result<()> {
             use rmp::encode::ValueWriteError;
             use rmp_serde::encode::Error;
             let mut s = rmp_serde::Serializer::new(buf).with_struct_map();
             match event.serialize(&mut s) {
                 Err(Error::InvalidValueWrite(e)) => match e {
-                    ValueWriteError::InvalidDataWrite(e) | ValueWriteError::InvalidMarkerWrite(e) => {
-                        Err(e)
-                    }
+                    ValueWriteError::InvalidDataWrite(e)
+                    | ValueWriteError::InvalidMarkerWrite(e) => Err(e),
                 },
                 Ok(()) => Ok(()),
                 Err(_) => unreachable!(),
@@ -87,9 +94,6 @@ mod msg_pack {
         }
     }
 }
-
-
-
 
 #[cfg(test)]
 mod tests {
@@ -124,7 +128,7 @@ mod tests {
         let deserialized = deserialize(&buffer);
         dbg!(events.len());
         assert_eq!(events.len(), deserialized.len());
-        
+
         for (orig, de) in events.iter().zip(&deserialized) {
             if !eq_event(orig, de) {
                 eprintln!("  serialized = {:?}", orig);
@@ -254,6 +258,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "messagepack")]
     fn msgpack() {
         fn deserialize(buf: &[u8]) -> Vec<Event> {
             use serde::Deserialize;

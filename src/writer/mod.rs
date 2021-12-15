@@ -7,6 +7,8 @@ use serde::Serialize;
 use std::io::{self, Stderr, Stdout, Write};
 use std::sync::{Arc, Mutex};
 
+// FIXME: don't panic when getting a poisoned Mutex
+
 mod nonblocking;
 
 pub use nonblocking::{FlushGuard, NonBlocking, NonBlockingBuilder};
