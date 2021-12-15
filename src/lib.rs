@@ -25,7 +25,7 @@ pub(crate) mod test_utils;
 
 //
 #[cfg_attr(docsrs, doc(cfg(feature = "consumer")))]
-#[cfg(feature = "consumer")]
+#[cfg(any(feature = "consumer"))]
 pub mod consumer;
 pub mod format;
 pub mod time;

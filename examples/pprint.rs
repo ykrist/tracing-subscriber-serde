@@ -1,8 +1,9 @@
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber_serde::{
-    consumer::{iter_json_reader, PrettyPrinter},
+    consumer::*,
     time::SystemClock,
+    format::Json,
     SerdeLayer, SpanEvents,
 };
 
@@ -36,7 +37,7 @@ fn main() -> anyhow::Result<()> {
         .show_span_ids(true)
         .limit_spans(10); // show at most N spans per event
 
-    for event in iter_json_reader(buffer.as_slice()) {
+    for event in Json.iter_reader(buffer.as_slice()) {
         let event = event?;
         printer.print(&event);
     }

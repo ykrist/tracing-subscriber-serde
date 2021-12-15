@@ -125,6 +125,7 @@ pub fn eq_event_ser_event(a: &Event, b: &ser::Event) -> bool {
         && eq_spans(spans, &b.spans)
 }
 
+#[cfg(feature="consumer")]
 pub fn eq_event(a: &Event, b: &Event) -> bool {
     let Event {
         kind,

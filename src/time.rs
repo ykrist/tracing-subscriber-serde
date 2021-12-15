@@ -68,10 +68,10 @@ impl SpanTimer {
 pub struct UnixTime {
     // Number of seconds since 00:00 1 Jan, 1970 (UTC)
     #[serde(rename = "s")]
-    seconds: u64,
+    pub(crate) seconds: u64,
     // Number of nanoseconds (seconds + nanoseconds = epoch time)
     #[serde(rename = "n")]
-    nanos: u32,
+    pub(crate) nanos: u32,
 }
 
 impl From<Duration> for UnixTime {

@@ -1,4 +1,4 @@
-// #![allow(dead_code)]
+#![allow(dead_code)]
 use serde::Serialize;
 use std::io::{self, Stdout};
 use std::path::{Path, PathBuf};

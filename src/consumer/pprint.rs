@@ -290,15 +290,16 @@ impl PrettyPrinter {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature="consumer"))]
 mod tests {
     use super::*;
-    use crate::consumer::iter_json_file;
-
+    use crate::consumer::*;
+    use crate::format::Json;
+    
     #[test]
     fn pretty_printing() -> anyhow::Result<()> {
         let p = PrettyPrinter::default();
-        for event in iter_json_file(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test.json")) {
+        for event in Json.iter_file(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test.json")) {
             p.print(&event?);
         }
         Ok(())
