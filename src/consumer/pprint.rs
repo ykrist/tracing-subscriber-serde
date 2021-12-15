@@ -2,7 +2,6 @@ use crate::{Event, EventKind, FieldValue, Level, Span};
 use ansi_term::Colour;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::num::NonZeroU64;
-use std::time::Duration;
 
 fn base64_id(id: NonZeroU64) -> [u8; 12] {
     const ALPHABET: &'static [u8] =
@@ -158,9 +157,13 @@ impl Display for FmtEvent<'_> {
 
                 match kind {
                     EventKind::SpanClose(Some(times)) if self.printer.span_times => {
-                        let busy = Duration::from_nanos(times.busy());
-                        let idle = Duration::from_nanos(times.idle());
-                        write!(f, "{}: {:?} busy, {:?} idle\n", verb, busy, idle)?;
+                        write!(
+                            f,
+                            "{}: {:?} busy, {:?} idle\n",
+                            verb,
+                            times.busy(),
+                            times.idle()
+                        )?;
                     }
                     _ => {
                         write!(f, "{}\n", verb)?;

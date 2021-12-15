@@ -10,14 +10,14 @@ pub struct SpanTime {
 }
 
 impl SpanTime {
-    /// The number of nanoseconds this span spent busy
-    pub fn busy(&self) -> u64 {
-        self.busy
+    /// The time this span spent busy
+    pub fn busy(&self) -> Duration {
+        Duration::from_nanos(self.busy)
     }
 
-    /// The number of nanoseconds this span spent idle
-    pub fn idle(&self) -> u64 {
-        self.idle
+    /// The time this span spent idle
+    pub fn idle(&self) -> Duration {
+        Duration::from_nanos(self.idle)
     }
 }
 
@@ -60,18 +60,18 @@ impl SpanTimer {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Ord, PartialOrd, Hash)]
-/// The UNIX epoch time, number of seconds + nanos since 00:00 1 Jan, 1970 (UTC).
+/// The UNIX epoch time, i.e the time since 00:00 1 Jan, 1970 (UTC).
 ///
 /// This type almost identical to [`Duration`], but uses shorter field names for serialisation
 /// to self-describing formats such as JSON.  It can be converted to and from [`Duration`]
 /// and converted to [`SystemTime`].
 pub struct UnixTime {
-    /// Number of seconds since 00:00 1 Jan, 1970 (UTC)
+    // Number of seconds since 00:00 1 Jan, 1970 (UTC)
     #[serde(rename = "s")]
-    pub seconds: u64,
-    /// Number of nanoseconds (seconds + nanoseconds = epoch time)
+    seconds: u64,
+    // Number of nanoseconds (seconds + nanoseconds = epoch time)
     #[serde(rename = "n")]
-    pub nanos: u32,
+    nanos: u32,
 }
 
 impl From<Duration> for UnixTime {

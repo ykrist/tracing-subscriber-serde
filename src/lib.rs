@@ -10,7 +10,7 @@
 //! | --- | --- | --- | --- |
 //! | `thread_id` | No | Enable recording thread IDs in events | [`thread_id_value`](https://github.com/rust-lang/rust/issues/67939) unstable feature |
 //! | `consumer` | Yes | Consumer API for pretty-printing events | [`ansi_term`] crate |
-//!
+//! | `messagepack` | No | [`MessagePack`](crate::format::MessagePack) format | [`rmp_serde`] crate |
 
 /// `SpanEvent` is re-exported [`FmtEvent`](tracing_subscriber::fmt::format::FmtSpan) from `tracing_subscriber` with
 /// a more suitable name.  Implements bitwise arithmetic operations so you can treat it as a set of bitflags.
