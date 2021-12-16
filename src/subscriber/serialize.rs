@@ -4,6 +4,7 @@ use crate::Level;
 use serde::ser::{SerializeMap, SerializeSeq};
 use serde::Serializer;
 
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(untagged)]
 pub enum FieldValue {
@@ -171,10 +172,10 @@ impl Serialize for SerializeSpan<'_> {
     where
         S: Serializer,
     {
-        let mut m = serializer.serialize_map(Some(self.0.len()))?;
+        let mut m = serializer.serialize_map(Some(3))?;
         let name = &(self.0)[0];
-        let fields = &(self.0)[1..];
-
+        let fields = SerializeSpanFields(&(self.0)[1..]);
+        
         match name {
             SpanItem::Start { span_name, id } => {
                 m.serialize_entry("n", span_name)?;
@@ -184,7 +185,7 @@ impl Serialize for SerializeSpan<'_> {
             }
             _ => unreachable!(),
         }
-        m.serialize_entry("f", &SerializeSpanFields(fields))?;
+        m.serialize_entry("f", &fields)?;
         m.end()
     }
 }
@@ -195,7 +196,8 @@ impl Serialize for Spans<'_> {
         S: Serializer,
     {
         let items = self.0.as_slice();
-        let mut seq = serializer.serialize_seq(None)?;
+        let len = items.iter().filter(|i| matches!(i, SpanItem::Start{ .. })).count();
+        let mut seq = serializer.serialize_seq(Some(len))?;
 
         if !items.is_empty() {
             let mut start = 0;
@@ -211,14 +213,19 @@ impl Serialize for Spans<'_> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature="consumer"))]
 mod tests {
+    use serde_json::StreamDeserializer;
+
     use super::*;
     use crate::test_utils::*;
+    use crate::consumer::*;
 
     // TODO: should probably fuzz this
-    #[test]
-    fn serde_borrowed_to_owned() {
+    fn serde_borrowed_to_owned<F>(fmt: F)
+        where 
+            F: SerdeFormat + for<'a> StreamFormat<&'a [u8]>
+    {
         let e = Event {
             kind: EventKind::Event(smallvec::smallvec![
                 ("message", FieldValue::Str("oh no!".into())),
@@ -246,15 +253,36 @@ mod tests {
             }),
         };
 
-        let serialized = serde_json::to_string_pretty(&e).unwrap();
-        println!("{}", serialized);
+        let mut buf = Vec::new();
+        fmt.serialize(&mut buf, &e).unwrap();
+        println!("serialized:");
+        for &byte in &buf {
+            print!("{}", std::ascii::escape_default(byte))
+        }
+        println!();
 
-        let de: crate::Event = serde_json::from_str(&serialized).unwrap();
+        let mut stream = fmt.iter_reader(&*buf);
+        let de = stream.next().unwrap().unwrap();
+
 
         if !eq_event_ser_event(&de, &e) {
             eprintln!("  serialized = {:?}", &e);
             eprintln!("deserialized = {:?}", &de);
             panic!("serialization/deserialization mismatch")
         }
+
+        assert!(stream.next().is_none());
+    }
+
+    #[test]
+    fn serde_borrowed_to_owned_json() {
+        serde_borrowed_to_owned(Json);
+    }
+
+
+    #[cfg(feature="messagepack")]
+    #[test]
+    fn serde_borrowed_to_owned_msgpack() {
+        serde_borrowed_to_owned(crate::format::MessagePack);
     }
 }
