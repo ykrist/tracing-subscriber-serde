@@ -60,18 +60,14 @@ mod consumer {
         fn next(&mut self) -> Option<Self::Item> {
             match Event::deserialize(&mut self.deserializer) {
                 Ok(e) => Some(Ok(e)),
-                Err(RmpError::InvalidDataRead(io_err)) 
-                | Err(RmpError::InvalidMarkerRead(io_err)) => {
+                Err(RmpError::InvalidDataRead(io_err)) | 
+                Err(RmpError::InvalidMarkerRead(io_err)) => 
                     if io::ErrorKind::UnexpectedEof == io_err.kind() {
                         None
                     } else {
                         Some(Err(io_err))
-                    }
-                },
-                err => {
-                    err.unwrap();
-                    unreachable!()
-                }
+                    }, 
+                Err(rmp_err) => Some(Err(io::Error::new(io::ErrorKind::InvalidData, rmp_err))),
             }
         }
     }
