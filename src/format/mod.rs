@@ -104,7 +104,7 @@ mod tests {
         ($($f:ident = $ty:ident $val:literal),* ) => {
         {
             #[allow(unused_mut)]
-            let mut m = HashMap::new();
+            let mut m = indexmap::IndexMap::new();
             $(
                 let v = fields!(@VAL $ty $val);
                 m.insert(stringify!($f).to_string(), v);

@@ -160,7 +160,7 @@ pub struct Span {
 
     /// The fields of the span
     #[serde(alias = "f")]
-    pub fields: HashMap<String, FieldValue>,
+    pub fields: IndexMap<String, FieldValue>,
 }
 
 /// A (de)serializable [`tracing`] event.
