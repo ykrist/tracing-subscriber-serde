@@ -11,13 +11,13 @@ mod pprint;
 pub use pprint::{FmtEvent, PrettyPrinter};
 
 /// Describes how events should be deserialized for a serde-supported format.
-/// 
-/// # Implementing 
+///
+/// # Implementing
 /// `StreamFormat::Stream` is typically a wrapper around a serde data format crate's [`Deserializer`](serde::Deserializer)
 /// implementation, which implements `Iterator`.  Any deserialization errors that aren't I/O errors should be panicked.
-/// 
+///
 /// [`iter_reader`](StreamFormat::iter_reader) should simply construct this wrapper type.
-/// 
+///
 /// You implement this as `impl<R: std::io::Read> StreamFormat<R> for MyFormat { ... }`
 pub trait StreamFormat<R>: Sized {
     /// The type of the stream.
@@ -28,13 +28,13 @@ pub trait StreamFormat<R>: Sized {
     /// The stream implements `Iterator<Item=io::Result<Event>>`, so it can be used like so:
     ///```no_run
     /// use tracing_subscriber_serde::{Event, consumer::StreamFormat, format::Json};
-    /// 
+    ///
     /// fn serializes_events_in_json(buf: &mut Vec<u8>) {
     ///     todo!()
     /// }
     ///
     /// let mut buffer = Vec::new();
-    /// 
+    ///
     /// serializes_events_in_json(&mut buffer);
     ///  
     /// for r in Json.iter_reader(&*buffer) {
@@ -49,8 +49,8 @@ pub trait StreamFormat<R>: Sized {
 /// It is automatically implemented if [`StreamFormat`] is implemented.
 pub trait IterFile: StreamFormat<BufReader<File>> {
     /// Open the file and parse events using this format.
-    /// 
-    /// If opening the file fails, the iterator will return one item, which is the 
+    ///
+    /// If opening the file fails, the iterator will return one item, which is the
     /// IO error.
     fn iter_file(&self, path: impl AsRef<Path>) -> TryOpenStream<Self::Stream> {
         let file = match File::open(path) {

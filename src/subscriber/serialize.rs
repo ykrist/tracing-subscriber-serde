@@ -4,7 +4,6 @@ use crate::Level;
 use serde::ser::{SerializeMap, SerializeSeq};
 use serde::Serializer;
 
-
 #[derive(Clone, Debug, Serialize)]
 #[serde(untagged)]
 pub enum FieldValue {
@@ -175,7 +174,7 @@ impl Serialize for SerializeSpan<'_> {
         let mut m = serializer.serialize_map(Some(3))?;
         let name = &(self.0)[0];
         let fields = SerializeSpanFields(&(self.0)[1..]);
-        
+
         match name {
             SpanItem::Start { span_name, id } => {
                 m.serialize_entry("n", span_name)?;
@@ -196,7 +195,10 @@ impl Serialize for Spans<'_> {
         S: Serializer,
     {
         let items = self.0.as_slice();
-        let len = items.iter().filter(|i| matches!(i, SpanItem::Start{ .. })).count();
+        let len = items
+            .iter()
+            .filter(|i| matches!(i, SpanItem::Start { .. }))
+            .count();
         let mut seq = serializer.serialize_seq(Some(len))?;
 
         if !items.is_empty() {
@@ -213,18 +215,16 @@ impl Serialize for Spans<'_> {
     }
 }
 
-#[cfg(all(test, feature="consumer"))]
+#[cfg(all(test, feature = "consumer"))]
 mod tests {
-    use serde_json::StreamDeserializer;
-
     use super::*;
-    use crate::test_utils::*;
     use crate::consumer::*;
+    use crate::test_utils::*;
 
     // TODO: should probably fuzz this
     fn serde_borrowed_to_owned<F>(fmt: F)
-        where 
-            F: SerdeFormat + for<'a> StreamFormat<&'a [u8]>
+    where
+        F: SerdeFormat + for<'a> StreamFormat<&'a [u8]>,
     {
         let e = Event {
             kind: EventKind::Event(smallvec::smallvec![
@@ -264,7 +264,6 @@ mod tests {
         let mut stream = fmt.iter_reader(&*buf);
         let de = stream.next().unwrap().unwrap();
 
-
         if !eq_event_ser_event(&de, &e) {
             eprintln!("  serialized = {:?}", &e);
             eprintln!("deserialized = {:?}", &de);
@@ -279,8 +278,7 @@ mod tests {
         serde_borrowed_to_owned(Json);
     }
 
-
-    #[cfg(feature="messagepack")]
+    #[cfg(feature = "messagepack")]
     #[test]
     fn serde_borrowed_to_owned_msgpack() {
         serde_borrowed_to_owned(crate::format::MessagePack);

@@ -31,11 +31,21 @@ pub fn eq_field_values(a: &FieldValue, b: &ser::FieldValue) -> bool {
 }
 
 pub fn eq_kind(a: &EventKind, b: &ser::EventKind) -> bool {
+    // We should preserve the order of fields
     match (a, b) {
         (EventKind::Event(a_fields), ser::EventKind::Event(b_fields)) => {
             if a_fields.len() != b_fields.len() {
                 return false;
             }
+
+            if !a_fields
+                .iter()
+                .zip(b_fields)
+                .all(|((af, av), (bf, bv))| af == bf && eq_field_values(av, bv))
+            {
+                return false;
+            }
+
             for (name, val) in b_fields {
                 match a_fields.get(*name) {
                     Some(v) if eq_field_values(v, val) => continue,
@@ -125,7 +135,7 @@ pub fn eq_event_ser_event(a: &Event, b: &ser::Event) -> bool {
         && eq_spans(spans, &b.spans)
 }
 
-#[cfg(feature="consumer")]
+#[cfg(feature = "consumer")]
 pub fn eq_event(a: &Event, b: &Event) -> bool {
     let Event {
         kind,
@@ -159,4 +169,3 @@ pub fn eq_event(a: &Event, b: &Event) -> bool {
     }
     true
 }
-

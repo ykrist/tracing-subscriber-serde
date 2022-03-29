@@ -58,7 +58,7 @@ impl NonBlockingBuilder {
         let writer = NonBlocking {
             sender: guard.sender.clone(),
             lossy: self.lossy,
-            message_buf_initial_capacity: self.max_buffered_records,
+            // message_buf_initial_capacity: self.max_buffered_records,
         };
         (writer, guard)
     }
@@ -79,7 +79,7 @@ enum Message {
 pub struct NonBlocking {
     sender: Sender<Message>,
     lossy: bool,
-    message_buf_initial_capacity: usize,
+    // message_buf_initial_capacity: usize,
 }
 
 /// The writer thread of [`NonBlocking`] will shutdown when this RAII guard is dropped,

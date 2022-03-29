@@ -290,12 +290,12 @@ impl PrettyPrinter {
     }
 }
 
-#[cfg(all(test, feature="consumer"))]
+#[cfg(all(test, feature = "consumer"))]
 mod tests {
     use super::*;
     use crate::consumer::*;
     use crate::format::Json;
-    
+
     #[test]
     fn pretty_printing() -> anyhow::Result<()> {
         let p = PrettyPrinter::default();

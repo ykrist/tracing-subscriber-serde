@@ -1,10 +1,7 @@
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber_serde::{
-    consumer::*,
-    time::SystemClock,
-    format::Json,
-    SerdeLayer, SpanEvents,
+    consumer::*, format::Json, time::SystemClock, SerdeLayer, SpanEvents,
 };
 
 mod common;

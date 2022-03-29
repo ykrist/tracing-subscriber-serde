@@ -1,4 +1,5 @@
 use crate::time::{SpanTime, UnixTime};
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::collections::HashMap;
@@ -131,7 +132,7 @@ pub enum EventKind {
     /// A regular tracing event, produced by [`tracing::event!`].
     /// Contains the event fields.  If a message was given to [`tracing::event!`] will be
     /// stored as the `"message"` key in the hashmap.
-    Event(HashMap<String, FieldValue>),
+    Event(IndexMap<String, FieldValue>),
     /// A synthesis event marking the creation of a span
     SpanCreate,
     /// A synthesis event marking the destruction of a span.  If span timings were enabled (see [`SerdeLayerBuilder::with_time_spans`](crate::SerdeLayerBuilder::with_time_spans),

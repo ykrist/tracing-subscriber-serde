@@ -4,7 +4,7 @@ use std::io::Write;
 
 mod json;
 pub use json::Json;
-#[cfg(feature="consumer")]
+#[cfg(feature = "consumer")]
 pub use json::JsonStream;
 
 #[cfg(feature = "messagepack")]
@@ -12,7 +12,7 @@ mod messagepack;
 #[cfg(feature = "messagepack")]
 #[cfg_attr(docsrs, doc(cfg(feature = "messagepack")))]
 pub use messagepack::MessagePack;
-#[cfg(all(feature = "messagepack", feature="consumer"))]
+#[cfg(all(feature = "messagepack", feature = "consumer"))]
 pub use messagepack::MessagePackStream;
 
 /// The main adaptor trait for logging tracing events with a [serde-supported format](https://docs.rs/serde).
@@ -55,11 +55,7 @@ impl<'a, T: SerdeFormat> SerdeFormat for &'a T {
     }
 }
 
-
-
-
-
-#[cfg(all(test, feature="consumer"))]
+#[cfg(all(test, feature = "consumer"))]
 mod tests {
     use super::*;
     use crate::consumer::*;
@@ -87,7 +83,6 @@ mod tests {
             // data_len = buffer.len();
         }
 
-        
         let mut deserialized = Vec::with_capacity(events.len());
         for e in fmt.iter_reader(&buffer) {
             deserialized.push(e.unwrap());
